@@ -1,0 +1,36 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/yuxuan_cor/lbr-stack/install/lbr_ros2_control/include/**",
+        "/home/yuxuan_cor/lbr-stack/install/lbr_fri_ros2/include/**",
+        "/home/yuxuan_cor/lbr-stack/install/lbr_fri_idl/include/**",
+        "/home/yuxuan_cor/my_ws/install/visp_hand2eye_calibration/include/**",
+        "/home/yuxuan_cor/my_ws/install/visp_camera_calibration/include/**",
+        "/home/yuxuan_cor/my_ws/install/visp_bridge/include/**",
+        "/home/yuxuan_cor/my_ws/install/realsense2_camera/include/**",
+        "/home/yuxuan_cor/my_ws/install/realsense2_camera_msgs/include/**",
+        "/home/yuxuan_cor/my_ws/install/kuka_action_interfaces/include/**",
+        "/home/yuxuan_cor/my_ws/install/iiwa_impedance_control/include/**",
+        "/home/yuxuan_cor/my_ws/install/flexbe_msgs/include/**",
+        "/home/yuxuan_cor/my_ws/install/charuco_detector/include/**",
+        "/home/yuxuan_cor/my_ws/install/charuco_detector_interfaces/include/**",
+        "/home/yuxuan_cor/lbr-stack/src/install/lbr_ros2_control/include/**",
+        "/home/yuxuan_cor/lbr-stack/src/install/lbr_fri_ros2/include/**",
+        "/home/yuxuan_cor/lbr-stack/src/install/lbr_fri_idl/include/**",
+        "/opt/ros/jazzy/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}
