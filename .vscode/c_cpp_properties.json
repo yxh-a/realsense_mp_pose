@@ -1,0 +1,25 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/yuxuan_cor/iiwa_ws/install/kuka_action_interfaces/include/**",
+        "/home/yuxuan_cor/iiwa_ws/install/iiwa_impedance_control/include/**",
+        "/home/yuxuan_cor/iiwa_ws/install/iiwa_hardware/include/**",
+        "/home/yuxuan_cor/iiwa_ws/install/external_torque_sensor_broadcaster/include/**",
+        "/opt/ros/jazzy/include/**",
+        "/home/yuxuan_cor/pose_ws/src/realsense-ros/realsense2_camera/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}
