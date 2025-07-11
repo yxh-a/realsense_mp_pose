@@ -8,5 +8,9 @@
         "/home/yuxuan_cor/iiwa_ws/install/cartesian_impedance_server/lib/python3.12/site-packages",
         "/home/yuxuan_cor/iiwa_ws/install/kuka_action_interfaces/lib/python3.12/site-packages",
         "/opt/ros/jazzy/lib/python3.12/site-packages"
-    ]
+    ],
+    "files.associations": {
+        "functional": "cpp",
+        "ranges": "cpp"
+    }
 }

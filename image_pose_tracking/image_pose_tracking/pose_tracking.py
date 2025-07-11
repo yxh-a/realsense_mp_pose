@@ -2,14 +2,14 @@ import rclpy
 from rclpy.node import Node
 import rclpy.wait_for_message
 from sensor_msgs.msg import Image, PointCloud2
-from visualization_msgs.msg import Marker, MarkerArray
+from visualization_msgs.msg import MarkerArray, Marker
 from cv_bridge import CvBridge
 import cv2
 import mediapipe as mp
 import sensor_msgs_py.point_cloud2 as pc2
 import sys
 import numpy as np
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import PoseArray, Point, Pose
 
 
 
@@ -39,16 +39,24 @@ class PoseDetectorNode(Node):
         # setup joint pixel variable, as well as joint 3D world coordinate variable in the right arm
         self.right_arm_index = [16,14,12,11] # right wrist, right elbow, right shoulder, left shoulder
         self.right_arm_names = ['right_wrist', 'right_elbow', 'right_shoulder', 'left_shoulder']
-        self.right_arm_3D = [] # list of points in 3D world coordinate
+        empty_point = Point()
+        empty_point.x = 0.0
+        empty_point.y = 0.0
+        empty_point.z = 0.0
+        self.right_arm_3D = [empty_point, empty_point, empty_point, empty_point]  # right arm 3D world coordinate
+        self.point_initialized = [False, False, False, False]  # flag to check if the point is initialized
+
         
         # setup rviz marker list publisher
+        self.joint_position_pub = self.create_publisher(PoseArray, '/joint_positions', 10)
+
         self.marker_pub = self.create_publisher(MarkerArray, '/pose_marker', 10)
-        self.marker_array = MarkerArray()
         
         self.image_width = 640
         self.image_height = 480
 
         self.point_cloud = PointCloud2()
+
 
         
 
@@ -68,7 +76,18 @@ class PoseDetectorNode(Node):
         self.image_hz = 0
         self.point_cloud_hz = 0
         self.get_logger().info('Pose Detector Node Started')
-       
+
+        # setup median filter for point detection
+        self.median_filter_size = 5  # Size of the median filter
+        self.shoulder_median_filter = np.zeros((self.median_filter_size, 3))  # Initialize median filter for shoulder
+        self.elbow_median_filter = np.zeros((self.median_filter_size, 3))  # Initialize median filter for elbow
+        self.wrist_median_filter = np.zeros((self.median_filter_size, 3))  # Initialize median filter for wrist
+        self.left_shoulder_median_filter = np.zeros((self.median_filter_size, 3))  # Initialize median filter for left shoulder
+
+        self.shoulder_point = Point()
+        self.elbow_point = Point()
+        self.wrist_point = Point()
+        self.left_shoulder_point = Point()
 
 
     def publish_image(self):
@@ -78,111 +97,150 @@ class PoseDetectorNode(Node):
         self.annotated_image = self.bridge.cv2_to_imgmsg(self.cv_image, encoding='bgr8')
         self.image_pub.publish(self.annotated_image)
 
-    def get_3d_points(self,this_uvs):
+    def validate_point(self, index,cloud_point):
+        if index < 0 or index > 3:
+            self.get_logger().error('Index out of range for right arm points')
+            return cloud_point
+        
+        old_point = self.right_arm_3D[index]
 
+        if cloud_point is None:
+            # self.get_logger().warn(f'Point at index {index} is None, retaining old point')
+            return old_point
+
+        if cloud_point.x == 0.0 and cloud_point.y == 0.0 and cloud_point.z == 0.0:
+            # self.get_logger().warn(f'Point at index {index} is (0,0,0), retaining old point')
+            return old_point
+        
+        # check if the point is initialized
+        # if not self.point_initialized[index]:
+        #     if float(cloud_point.x) != 0.0 and float(cloud_point.y) != 0.0 and float(cloud_point.z) != 0.0:
+        #         # if the point is not initialized, set it to the new point
+        #         self.get_logger().info(f'Point at index {index} is not initialized, setting to new point')
+        #         self.point_initialized[index] = True
+        #         return cloud_point
+        
+        # # check if the new point is too far from the old point
+        # distance = np.sqrt((cloud_point.x - old_point.x) ** 2 + (cloud_point.y - old_point.y) ** 2 + (cloud_point.z - old_point.z) ** 2)
+        # if distance > 0.5:  # threshold of 0.5 meters
+        #     # self.get_logger().warn(f'Point at index {index} is too far from old point, retaining old point')
+        #     return old_point
+        
+        # if the point is valid, return the new point
+        # self.get_logger().info(f'Point at index {index} is valid, updating point [{cloud_point.x}, {cloud_point.y}, {cloud_point.z}]')
+        return cloud_point
+
+    def point_from_uv(self, u, v):
+        # this function returns the point from the point cloud given the pixel coordinate (u, v)
         if self.point_cloud is None:
+            self.get_logger().error('Point Cloud is not initialized')
             return None
-        # get the pixel coordinate of the right arm
-        # print(self.point_cloud)
+        
+        width = self.point_cloud.width
 
+        # generate a patch of pixels around the pixel coordinate (u, v) to get a list of points (+-1 pixels)
+        this_uvs = []
+        for i in range(-2, 3):  # from -2 to 2 inclusive
+            for j in range(-2, 3):  # from -2 to 2 inclusive
+                new_u = u + i
+                new_v = v + j
+                if 0 <= new_u < self.image_width and 0 <= new_v < self.image_height:
+                    new_uv = new_u + new_v * width
+                    this_uvs.append(new_uv)
+        
+        # read the list of points from the point cloud, get rid of anomoly, and return median of 
         cloud_array = pc2.read_points_list(self.point_cloud, field_names=("x", "y", "z"), skip_nans=True, uvs=this_uvs)
-        points3d = []
-        for i in range(len(cloud_array)):\
-            # check if the point is not (0,0,0)
-            cloud_point = cloud_array[i]
-            if cloud_point != (0.0, 0.0, 0.0):
-                this_uv = this_uvs[i]
-                # substitue with increments of one pixel until  it is not (0,0,0)
-                while cloud_point == (0.0, 0.0, 0.0):
-                    this_uv = (this_uv[0]+1, this_uv[1])
-                    cloud_point = pc2.read_points_list(self.point_cloud, field_names=("x", "y", "z"), skip_nans=True, uvs=this_uv)[0]
-                points3d.append(cloud_point)
-        return points3d
+        
+        # self.get_logger().info(f'Found {len(cloud_array)} points at pixel coordinate (u, v): ({u}, {v})')
+        # get rid of points that are (0,0,0)
+        cloud_array = [point for point in cloud_array if not (point.x == 0.0 and point.y == 0.0 and point.z == 0.0)]
+        # self.get_logger().info(f'After filtering, get {len(cloud_array)} valid points')
+        # if the point is not found, return None
+        if len(cloud_array) < 1:
+            # self.get_logger().warn(f'No point found at pixel coordinate (u, v): ({u}, {v})')
+            return None
+        
+        #return median of the points
+        cloud_point = cloud_array[0]
+        # self.get_logger().info(f'Found {len(cloud_array)} points at pixel coordinate (u, v): ({u}, {v})')
+        
+        return cloud_point
+    
 
     def publish_markers(self):
-           
+    # this function publish the markers for the right arm, as well as their positions to /joint_positions
+        uvs = [] # iterable
+        width = self.point_cloud.width
 
-            uvs = [] # iterable
-            width = self.point_cloud.width
+        # get the pixel coordinate of the right arm
+    
+        for i in range(len(self.right_arm_index)):
 
-            # get the pixel coordinate of the right arm
-            for i in self.right_arm_index:
-                u = int(self.results.pose_landmarks.landmark[i].x * self.image_width)
-                v = int(self.results.pose_landmarks.landmark[i].y * self.image_height)
-                uvs.append(u+v*width)
-
-            # get the 3D world coordinate of the right arm
-            # uvs_ = [(u,v) for u,v in uvs]
-            self.right_arm_3D = self.get_3d_points(uvs)
+            index = self.right_arm_index[i]
+            u = int(self.results.pose_landmarks.landmark[index].x * self.image_width)
+            v = int(self.results.pose_landmarks.landmark[index].y * self.image_height)
             
-            num_points = len(self.right_arm_3D)
-            # self.get_logger().info('Number of points in right arm: {}'.format(num_points))
-            #  check if all points are floats
-            # print(self.right_arm_3D)
-            # create marker for each point in the right arm
-            if num_points < 4:
-                self.get_logger().info('Not enough points in right arm')
-            else:
-                  # create marker array
-                self.marker_array = MarkerArray()
-                marker_id = 0
-                for point in self.right_arm_3D:
-                    # print("point ", marker_id, " : ", point)
-                    marker = Marker()
-                    marker.header.frame_id = "camera_depth_optical_frame"
-                    marker.header.stamp = rclpy.clock.Clock().now().to_msg()
-                    marker.id = marker_id
-                    marker_id += 1
-                    marker.type = Marker.SPHERE
-                    marker.action = Marker.ADD
-                    print(float(point.x), float(point.y), float(point.z))
-                    marker.pose.position.x = float(point.x)
-                    marker.pose.position.y = float(point.y)
-                    marker.pose.position.z = float(point.z)
-                    marker.scale.x = 0.05
-                    marker.scale.y = 0.05
-                    marker.scale.z = 0.05
-                    marker.color.a = 1.0
-                    marker.color.r = 1.0
+            cloud_point = self.point_from_uv(u, v)
+            validated_popint = self.validate_point(i, cloud_point)
+        
+            self.right_arm_3D[i] = validated_popint
 
-                    # add names
-                    marker.ns = self.right_arm_names[marker.id]
-                    marker.text = self.right_arm_names[marker.id]
+        # create marker array
+        self.paint_markers()
+        
+    def surround_search(self,this_uv,width):
+        # this functions goes aournd the pixel in the roder of up, down, left, right, and returns the first point that is not (0,0,0)
+        # decompose uvs in to u and v
+        u = int(this_uv % width)
+        v = int(this_uv / width)
 
-                    self.marker_array.markers.append(marker)
-
-                # Draw line strip connecting all right arm points
-                line_marker = Marker()
-                line_marker.header.frame_id = "camera_frame"
-                line_marker.header.stamp = self.get_clock().now().to_msg()
-                line_marker.id = marker_id
-                line_marker.type = Marker.LINE_STRIP
-                line_marker.action = Marker.ADD
-                line_marker.scale.x = 0.02  # thickness of the line
-                line_marker.color.a = 1.0
-                line_marker.color.r = 0.0
-                line_marker.color.g = 1.0
-                line_marker.color.b = 0.0
-                line_marker.ns = "right_arm_line"
-
-                # Add points to the line
-                for pt in self.right_arm_3D:
-                    p = Point()
-                    p.x = float(pt.x)
-                    p.y = float(pt.y)
-                    p.z = float(pt.z)
-                    line_marker.points.append(p)
-
-                self.marker_array.markers.append(line_marker)
-
+        # check the point in the order of up, down, left, right
+        point = pc2.read_points_list(self.point_cloud, field_names=("x", "y", "z"), skip_nans=True, uvs=[this_uv])[0]
+        self.get_logger().info(f'Searching for point around uv: {this_uv}')
+        iteration = 0
+        while point.x == 0.0 and point.y == 0.0 and point.z == 0.0:
+            iteration += 1
+            self.get_logger().info(f'Iteration {iteration}: No point found at uv: {this_uv}, checking surrounding pixels...')
+            # check up
+            if v > 0:
+                v -= 1
+                new_uv = u + v * width
+                point = pc2.read_points_list(self.point_cloud, field_names=("x", "y", "z"), skip_nans=True, uvs=[new_uv])[0]
+                if point.x != 0.0 or point.y != 0.0 or point.z != 0.0:
+                    return point
             
-            self.marker_pub.publish(self.marker_array)
+            # check down
+            if v < self.point_cloud.height - 1:
+                v += 1
+                new_uv = u + v * width
+                point = pc2.read_points_list(self.point_cloud, field_names=("x", "y", "z"), skip_nans=True, uvs=[new_uv])[0]
+                if point.x != 0.0 or point.y != 0.0 or point.z != 0.0:
+                    return point
+            
+            # check left
+            if u > 0:
+                u -= 1
+                new_uv = u + v * width
+                point = pc2.read_points_list(self.point_cloud, field_names=("x", "y", "z"), skip_nans=True, uvs=[new_uv])[0]
+                if point.x != 0.0 or point.y != 0.0 or point.z != 0.0:
+                    return point
+            
+            # check right
+            if u < self.point_cloud.width - 1:
+                u += 1
+                new_uv = u + v * width
+                point = pc2.read_points_list(self.point_cloud, field_names=("x", "y", "z"), skip_nans=True, uvs=[new_uv])[0]
+                if point.x != 0.0 or point.y != 0.0 or point.z != 0.0:
+                    return point
+        # if no point is found, return None
+        return None
+        
 
 
     def point_cloud_callback(self, msg):
         self.point_cloud_hz = 1.0 / (self.get_clock().now() - self.point_cloud_last_time).nanoseconds*1e9
         self.point_cloud_last_time = self.get_clock().now()
-        self.get_logger().info('Point Cloud Hz: {}'.format(self.point_cloud_hz))
+        # self.get_logger().info('Point Cloud Hz: {}'.format(self.point_cloud_hz))
         self.point_cloud = msg
         # # Publish 3D World Coordinate
         try:
@@ -203,7 +261,88 @@ class PoseDetectorNode(Node):
         except Exception as e:
             self.get_logger().error('Error Processing Point Cloud: {}'.format(e))
 
+    def paint_markers(self):
+        marker_array = MarkerArray()
+        joint_pitions = PoseArray()
+        joint_pitions.header.frame_id = "camera_depth_optical_frame"
+        # joint_pitions.header.frame_id = "lbr_link_0"
+        joint_pitions.header.stamp = self.get_clock().now().to_msg()
+        marker_id = 0
 
+        if len(self.right_arm_3D) < 4:
+            self.get_logger().warn('Right arm 3D points are not initialized, skipping marker publishing')
+            return
+        
+        for point in self.right_arm_3D:
+            # print("point ", marker_id, " : ", point)
+            marker = Marker()
+            joint_postion = Pose()
+            marker.header.frame_id = "camera_depth_optical_frame"
+            # marker.header.frame_id = "lbr_link_0"
+            marker.header.stamp = rclpy.clock.Clock().now().to_msg()
+            marker.id = marker_id
+            marker_id += 1
+            marker.type = Marker.SPHERE
+            marker.action = Marker.ADD
+            marker.pose.position.x = float(point.x)
+            joint_postion.position.x = float(point.x)
+            marker.pose.position.y = float(point.y)
+            joint_postion.position.y = float(point.y)
+            marker.pose.position.z = float(point.z)
+            joint_postion.position.z = float(point.z)
+            marker.scale.x = 0.05
+            marker.scale.y = 0.05
+            marker.scale.z = 0.05
+            marker.color.a = 1.0
+            marker.color.r = 1.0
+
+            # Text marker (caption)
+            text_marker = Marker()
+            text_marker.header.frame_id = "camera_depth_optical_frame"
+            text_marker.header.stamp = rclpy.clock.Clock().now().to_msg()
+            text_marker.id = marker_id + 1000  # offset to avoid ID collision
+            text_marker.type = Marker.TEXT_VIEW_FACING
+            text_marker.action = Marker.ADD
+            text_marker.pose.position.x = float(point.x)
+            text_marker.pose.position.y = float(point.y)
+            text_marker.pose.position.z = float(point.z) + 0.05  # put text slightly above sphere
+
+            text_marker.scale.z = 0.04  # height of text
+            text_marker.color.a = 1.0
+            text_marker.color.r = 1.0
+            text_marker.color.g = 1.0
+            text_marker.color.b = 1.0
+
+            text_marker.text = self.right_arm_names[marker.id]
+            text_marker.ns = "right_arm_text"
+
+            marker_array.markers.append(marker)
+            marker_array.markers.append(text_marker)
+            joint_pitions.poses.append(joint_postion)
+
+
+            # Draw line strip connecting all right arm points
+            line_marker = Marker()
+            line_marker.header.frame_id = "camera_depth_optical_frame"
+            # line_marker.header.frame_id = "lbr_link_0"
+            line_marker.header.stamp = self.get_clock().now().to_msg()
+            line_marker.id = marker_id
+            line_marker.type = Marker.LINE_STRIP
+            line_marker.action = Marker.ADD
+            line_marker.scale.x = 0.02  # thickness of the line
+            line_marker.color.a = 1.0
+            line_marker.color.r = 0.0
+            line_marker.color.g = 1.0
+            line_marker.color.b = 0.0
+            line_marker.ns = "right_arm_line"
+            line_marker.points.append(self.wrist_point)
+            line_marker.points.append(self.elbow_point)
+            line_marker.points.append(self.shoulder_point)
+
+            marker_array.markers.append(line_marker)
+
+            self.marker_pub.publish(marker_array)
+            self.joint_position_pub.publish(joint_pitions)
 
     def image_callback(self, msg):
         self.image_hz = 1.0 / (self.get_clock().now() - self.image_last_time).nanoseconds*1e9
@@ -232,7 +371,7 @@ class PoseDetectorNode(Node):
             self.get_logger().error('Error Processing Image: {}'.format(e))
         
         
-        # self.process_point_cloud()
+
 
 def main(args=None):
 

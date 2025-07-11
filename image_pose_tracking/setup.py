@@ -11,6 +11,10 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name, 'config'), 
+            ['config/right_arm.urdf', 
+             'config/right_arm.rviz',
+             'config/right_arm_red.urdf']),
     ],
     install_requires=[
         'setuptools',
@@ -27,6 +31,7 @@ setup(
     entry_points={
         'console_scripts': [
             'pose_tracking = image_pose_tracking.pose_tracking:main',
+            'forward_solver = image_pose_tracking.arm_solver_forward:main',
         ],
     },
 )
