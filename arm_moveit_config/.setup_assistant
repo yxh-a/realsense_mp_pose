@@ -1,0 +1,25 @@
+moveit_setup_assistant_config:
+  urdf:
+    package: image_pose_tracking
+    relative_path: config/right_arm.urdf
+  srdf:
+    relative_path: config/upper_arm.srdf
+  package_settings:
+    author_name: Yuxuan Hu
+    author_email: alanhyxszic@gmail.com
+    generated_timestamp: 1753878015
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity
+  modified_urdf:
+    xacros:
+      - control_xacro
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity

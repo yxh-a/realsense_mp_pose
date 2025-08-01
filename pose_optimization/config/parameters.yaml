@@ -1,6 +1,10 @@
 ee2hand:
   translation: [0.0, 0.026, 0.07]  # x, y, z in meters
-  rotation: [-1.57, 0, -1.57]  # Roll, Pitch, Yaw in radians
+  rotation: [1.57, 0, -1.57]  # Roll, Pitch, Yaw in radians
+
+world2camera:
+  translation: [-0.1,-0.45,0.09]  # x, y, z in meters
+  rotation: [-1.57,0.0,-1.57]  # Roll, Pitch, Yaw in radians
 
 operational:
     method: "SVD"  # Method to use for optimization, e.g., "SVD", "Levenberg-Marquardt"
@@ -13,3 +17,5 @@ operational:
     max_iterations: 100  # Maximum number of iterations for optimization
     convergence_threshold: 1e-2  # Threshold for convergence
     damping_factor: 0.1  # Damping factor for optimization
+
+    baseline_hz: 20  # Baseline frequency for optimization

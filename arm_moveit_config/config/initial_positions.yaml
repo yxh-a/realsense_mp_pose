@@ -1,0 +1,10 @@
+# Default initial positions for upper_arm's ros2_control fake system
+
+initial_positions:
+  jRightElbow_roty: 0
+  jRightElbow_rotz: 0
+  jRightShoulder_rotx: 0
+  jRightShoulder_roty: 0
+  jRightShoulder_rotz: 0
+  jRightWrist_rotx: 0
+  jRightWrist_rotz: 0

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(joint_velocity_estimation)
+project(ik_solver_moveit)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -8,38 +8,42 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(moveit_core REQUIRED)
+find_package(moveit_ros_planning REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
-find_package(pinocchio REQUIRED)
-find_package(sensor_msgs REQUIRED)
 find_package(ament_index_cpp REQUIRED)
+find_package(srdfdom REQUIRED)
+find_package(urdf REQUIRED)
 find_package(yaml-cpp REQUIRED)
+
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
+add_executable(ik_solver src/ik_solver.cpp)
 
-add_executable(joint_velocity_estimator src/joint_velocity_estimator.cpp)
-
-ament_target_dependencies(joint_velocity_estimator
+ament_target_dependencies(ik_solver
   rclcpp
+  moveit_core
   geometry_msgs
   tf2_geometry_msgs
-  pinocchio
-  sensor_msgs
   ament_index_cpp
+  srdfdom
+  urdf
+  yaml-cpp
+  moveit_ros_planning
 )
 
-target_link_libraries(joint_velocity_estimator
+target_link_libraries(
+  ik_solver
   ${catkin_LIBRARIES}
-  yaml-cpp)
-  
-target_include_directories(joint_velocity_estimator PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
-target_compile_features(joint_velocity_estimator PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+  yaml-cpp
+)
 
-install(TARGETS joint_velocity_estimator
-  DESTINATION lib/${PROJECT_NAME})
+# Install the executable
+install(TARGETS ik_solver
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

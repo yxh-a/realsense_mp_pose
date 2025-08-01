@@ -50,7 +50,7 @@ public:
         // TF Hand-to-EE transform
         // read the hand-to-EE transform from the YAML file
         RCLCPP_INFO(this->get_logger(), "Loading hand-to-EE transform from YAML");
-        std::string config_path = ament_index_cpp::get_package_share_directory("pose_optimization") + "/config/ee2hand.yaml";
+        std::string config_path = ament_index_cpp::get_package_share_directory("pose_optimization") + "/config/parameters.yaml";
         YAML::Node config = YAML::LoadFile(config_path);
         if (!config["ee2hand"])
         {
