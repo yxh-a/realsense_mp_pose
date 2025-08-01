@@ -173,7 +173,7 @@
         <parent link="RightHand_f1"/>
         <child link="RightHand"/>
         <dynamics damping="0.1" friction="0.0"/>
-        <limit effort="30" velocity="1.0" lower="-0.523599" upper="0.349066" />
+        <limit effort="30" velocity="1.0" lower="-1.57" upper="1.57" />
         <axis xyz="0 0 1" />
     </joint>
 

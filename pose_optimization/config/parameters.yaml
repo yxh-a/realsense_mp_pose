@@ -1,6 +1,6 @@
 ee2hand:
-  translation: [0.0, 0.026, 0.07]  # x, y, z in meters
-  rotation: [1.57, 0, -1.57]  # Roll, Pitch, Yaw in radians
+  translation: [0.0, -0.026, 0.07]  # x, y, z in meters
+  rotation: [3.14, 0, -1.57]  # Roll, Pitch, Yaw in radians
 
 world2camera:
   translation: [-0.1,-0.45,0.09]  # x, y, z in meters
@@ -19,3 +19,7 @@ operational:
     damping_factor: 0.1  # Damping factor for optimization
 
     baseline_hz: 20  # Baseline frequency for optimization
+
+initial_joint_states: [-1.8662461835704307, 0.8590559575694462, -0.6697032662556018, 0.21030423026992587, 0.0, 0.0, 0.0]
+# initial_joint_states: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Initial joint states for the arm
+  

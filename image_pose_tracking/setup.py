@@ -14,7 +14,9 @@ setup(
         (os.path.join('share', package_name, 'config'), 
             ['config/right_arm.urdf', 
              'config/right_arm.rviz',
-             'config/right_arm_red.urdf']),
+             'config/right_arm_red.urdf',
+             'config/right_arm_baseline.urdf'
+            ]),
     ],
     install_requires=[
         'setuptools',

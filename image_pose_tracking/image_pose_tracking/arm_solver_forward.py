@@ -141,7 +141,7 @@ class Arm_Solver_Node(Node):
             np.radians(theta_wrist_x),  # Wrist x rotation
             np.radians(theta_wrist_z)   # Wrist z rotation
         ]
-        # Publish the joint states
+      
         # self.get_logger().info(f"Publishing joint states: {joint_states.position}")
         self.joint_state_publisher.publish(joint_states)
     def get_4DOF_joint_angles(self, u, v):
@@ -254,7 +254,7 @@ class Arm_Solver_Node(Node):
             shoulder_pose.position.y,
             shoulder_pose.position.z
         ])
-        # self.get_logger().info(f"Received shoulder: {self.shoulder_translation}")
+        self.get_logger().info(f"Received shoulder: {self.shoulder_translation}")
         # Transform the wrist, elbow, and shoulder positions to the shoulder frame
         self.wrist_translation = self.transform_to_shoulder_frame(self.wrist_translation)
         self.elbow_translation = self.transform_to_shoulder_frame(self.elbow_translation)

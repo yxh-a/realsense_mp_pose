@@ -31,7 +31,7 @@ int main(int argc, char **argv)
     auto node = rclcpp::Node::make_shared("ik_solver_node");
 
     // === Load URDF and SRDF from file ===
-    std::string urdf_path = ament_index_cpp::get_package_share_directory("image_pose_tracking") + "/config/right_arm.urdf";
+    std::string urdf_path = ament_index_cpp::get_package_share_directory("image_pose_tracking") + "/config/right_arm_baseline.urdf";
     std::string srdf_path = ament_index_cpp::get_package_share_directory("arm_moveit_config") + "/config/upper_arm.srdf";
     std::string urdf_string = loadFile(urdf_path);
     std::string srdf_string = loadFile(srdf_path);
@@ -114,6 +114,33 @@ int main(int argc, char **argv)
     Eigen::Isometry3d T_hand_ee = T_ee_hand.inverse();
     RCLCPP_INFO(node->get_logger(), "Hand to EE transform loaded successfully");
 
+    // get initial joint states from parameters
+    std::vector<double> initial_joint_states;
+    if (config["initial_joint_states"])
+    {
+        for (const auto& value : config["initial_joint_states"])
+        {
+            initial_joint_states.push_back(value.as<double>());
+        }
+    }
+    else
+    {
+        RCLCPP_ERROR(node->get_logger(), "initial_joint_states configuration not found in %s", config_path);
+        return 0;
+    }   
+    std::vector<double> joint_values(joint_model_group->getVariableCount(), 0.0);
+    if (initial_joint_states.size() == joint_model_group->getVariableCount())
+    {
+        joint_values = initial_joint_states;
+    }
+    else
+    {
+        RCLCPP_ERROR(node->get_logger(), "Initial joint states size does not match the number of joints in the group.");
+        return 0;
+    }
+    // Set the initial joint values
+    robot_state.setVariablePositions(joint_values);
+
     //   === Initialize TF listener ===
     tf2_ros::Buffer tf_buffer(node->get_clock());
     tf2_ros::TransformListener tf_listener(tf_buffer);
@@ -138,7 +165,7 @@ int main(int argc, char **argv)
         geometry_msgs::msg::TransformStamped transform_stamped;
         try
         {
-            transform_stamped = tf_buffer.lookupTransform("RightShoulder", "lbr_link_ee", tf2::TimePointZero);
+            transform_stamped = tf_buffer.lookupTransform("camera_depth_optical_frame", "lbr_link_ee", tf2::TimePointZero);
         }
         catch (const tf2::TransformException &ex)
         {
@@ -162,28 +189,11 @@ int main(int argc, char **argv)
         // Apply the hand-to-EE transform
         Eigen::Isometry3d hand_pose = ee_pose * T_ee_hand;
 
-        // publish the hand pose as a transform to tf
-        geometry_msgs::msg::TransformStamped hand_transform_stamped;
-        hand_transform_stamped.header.stamp = node->now();
-        hand_transform_stamped.header.frame_id = "RightShoulder";
-        hand_transform_stamped.child_frame_id = "hand_frame";
-        hand_transform_stamped.transform.translation.x = hand_pose.translation().x();
-        hand_transform_stamped.transform.translation.y = hand_pose.translation().y();
-        hand_transform_stamped.transform.translation.z = hand_pose.translation().z();
-        Eigen::Quaterniond hand_quat(hand_pose.linear());
-        hand_transform_stamped.transform.rotation.x = hand_quat.x();
-        hand_transform_stamped.transform.rotation.y = hand_quat.y();
-        hand_transform_stamped.transform.rotation.z = hand_quat.z();
-        hand_transform_stamped.transform.rotation.w = hand_quat.w();   
-        tf_broadcaster->sendTransform(hand_transform_stamped);
-
         RCLCPP_INFO(node->get_logger(), "hand_pose: translation: [%f, %f, %f], rotation: [%f, %f, %f, %f]",
                     hand_pose.translation().x(), hand_pose.translation().y(), hand_pose.translation().z(),
                     q.w(), q.x(), q.y(), q.z());
         // solve inverse kinematics based on the hand pose
-        std::vector<double> joint_values(joint_model_group->getVariableCount(), 0.0);
-        
-        bool ik_solved = robot_state.setFromIK(joint_model_group, hand_pose, "RightHand", 0.1);
+        bool ik_solved = robot_state.setFromIK(joint_model_group, hand_pose, 0.1);
         if (!ik_solved)
         {
             RCLCPP_ERROR(node->get_logger(), "Inverse kinematics could not be solved for the hand pose.");
@@ -191,8 +201,7 @@ int main(int argc, char **argv)
         else
         {
             RCLCPP_INFO(node->get_logger(), "Inverse kinematics solved successfully.");
-            // Update the robot state with the new joint values
-            robot_state.setVariablePositions(joint_values);
+            robot_state.copyJointGroupPositions(joint_model_group, joint_values);
         }
 
         // Publish the joint states

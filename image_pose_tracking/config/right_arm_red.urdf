@@ -9,7 +9,7 @@
     <joint name="world_to_shoulder" type="fixed">
         <parent link="camera_depth_optical_frame"/>
         <child link="RightShoulder"/>
-        <origin xyz="-0.0361881  -0.14083758  1.01600003" rpy="3.14 1.57 0"/>
+        <origin xyz="-0.02348199 -0.12654904  1.02600002" rpy="3.14 1.57 0"/>
     </joint>
 
     <!--  shoudler, 3DOF -->
@@ -203,16 +203,27 @@
         </collision>
 
     </link>
-<!-- 
     <joint name="jRightHandCOM" type="fixed">
-        <origin xyz="0 -0.05 0" rpy="0 0 0"/>
+        <origin xyz="0 -0.096206 0" rpy="0 0 0"/>
         <parent link="RightHand"/>
-        <child link="EE_center"/>
+        <child link="RightHandCOM"/>
         <axis xyz="0 0 0" />
     </joint>
-  
-    <link name="EE_center">
-    </link> -->
+    <link name="RightHandCOM">
+        <inertial>
+            <mass value="0.00001"/>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <inertia ixx="0" iyy="0" izz="0" ixy="0" ixz="0" iyz="0"/>
+        </inertial>
+        <visual>
+            <!--box origin wrt jRightWrist-->
+            <origin xyz="0   0           0" rpy="0 0 0" />
+            <geometry>
+                <box size="0     0    0"/>
+            </geometry>
+            <material name="color"/>
+        </visual>
+    </link>
        
     
 <!-- End of right arm configuration -->

@@ -10,7 +10,15 @@
     <!--CHAINS: When a chain is specified, all the links along the chain (including endpoints) are included in the group. Additionally, all the joints that are parents to included links are also included. This means that joints along the chain and the parent joint of the base link are included in the group-->
     <!--SUBGROUPS: Groups can also be formed by referencing to already defined group names-->
     <group name="arm">
-        <joint name="world_to_shoulder"/>
+        <link name="RightShoulder"/>
+        <link name="RightUpperArm_f1"/>
+        <link name="RightUpperArm_f2"/>
+        <link name="RightUpperArm"/>
+        <link name="RightForeArm"/>
+        <link name="RightForeArm_f1"/>
+        <link name="RightHand_f1"/>
+        <link name="RightHand"/>
+        <link name="RightHandCOM"/>
         <joint name="jRightShoulder_rotx"/>
         <joint name="jRightShoulder_rotz"/>
         <joint name="jRightShoulder_roty"/>
@@ -18,12 +26,19 @@
         <joint name="jRightElbow_roty"/>
         <joint name="jRightWrist_rotx"/>
         <joint name="jRightWrist_rotz"/>
+        <joint name="jRightHandCOM"/>
+        <chain base_link="RightShoulder" tip_link="RightHandCOM"/>
     </group>
-    <group name="Hand">
-        <link name="RightHand"/>
-    </group>
-    <!--END EFFECTOR: Purpose: Represent information about an end effector.-->
-    <end_effector name="hand" parent_link="RightHand" group="Hand"/>
+    <!--GROUP STATES: Purpose: Define a named state for a particular group, in terms of joint values. This is useful to define states like 'folded arms'-->
+    <group_state name="start_up" group="arm">
+        <joint name="jRightElbow_roty" value="0"/>
+        <joint name="jRightElbow_rotz" value="0.210304"/>
+        <joint name="jRightShoulder_rotx" value="-1.86625"/>
+        <joint name="jRightShoulder_roty" value="-0.669703"/>
+        <joint name="jRightShoulder_rotz" value="0.859056"/>
+        <joint name="jRightWrist_rotx" value="0"/>
+        <joint name="jRightWrist_rotz" value="0"/>
+    </group_state>
     <!--DISABLE COLLISIONS: By default it is assumed that any link of the robot could potentially come into collision with any other link in the robot. This tag disables collision checking between a specified pair of links. -->
     <disable_collisions link1="RightForeArm" link2="RightHand" reason="Adjacent"/>
     <disable_collisions link1="RightForeArm" link2="RightUpperArm" reason="Adjacent"/>
