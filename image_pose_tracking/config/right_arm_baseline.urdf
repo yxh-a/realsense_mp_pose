@@ -9,7 +9,7 @@
     <joint name="world_to_shoulder" type="fixed">
         <parent link="camera_depth_optical_frame"/>
         <child link="RightShoulder"/>
-        <origin xyz="-0.02348199 -0.12654904  1.02600002" rpy="3.14 1.57 0"/>
+        <origin xyz="-0.03230042 -0.11765296  1.16500001" rpy="3.14 1.57 0"/>
     </joint>
 
     <!--  shoudler, 3DOF -->
@@ -204,7 +204,7 @@
 
     </link>
     <joint name="jRightHandCOM" type="fixed">
-        <origin xyz="0 -0.096206 0" rpy="0 0 0"/>
+        <origin xyz="0 -0.05 0" rpy="0 0 0"/>
         <parent link="RightHand"/>
         <child link="RightHandCOM"/>
         <axis xyz="0 0 0" />

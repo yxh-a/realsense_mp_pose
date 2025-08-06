@@ -162,10 +162,14 @@ class PoseDetectorNode(Node):
         
         #return median of the points
         cloud_point = cloud_array[0]
+        # add a small offset to the z coordinate to compensate for surface point
+        true_point = Point()
+        true_point.x = cloud_point[0]
+        true_point.y = cloud_point[1]
+        true_point.z = cloud_point[2]+ 0.05  # add a small offset to the z coordinate to compensate for surface point
         # self.get_logger().info(f'Found {len(cloud_array)} points at pixel coordinate (u, v): ({u}, {v})')
-        
-        return cloud_point
-    
+
+        return true_point
 
     def publish_markers(self):
     # this function publish the markers for the right arm, as well as their positions to /joint_positions
@@ -181,60 +185,12 @@ class PoseDetectorNode(Node):
             v = int(self.results.pose_landmarks.landmark[index].y * self.image_height)
             
             cloud_point = self.point_from_uv(u, v)
-            validated_popint = self.validate_point(i, cloud_point)
-        
-            self.right_arm_3D[i] = validated_popint
+            validated_point = self.validate_point(i, cloud_point)
+
+            self.right_arm_3D[i] = validated_point
 
         # create marker array
         self.paint_markers()
-        
-    def surround_search(self,this_uv,width):
-        # this functions goes aournd the pixel in the roder of up, down, left, right, and returns the first point that is not (0,0,0)
-        # decompose uvs in to u and v
-        u = int(this_uv % width)
-        v = int(this_uv / width)
-
-        # check the point in the order of up, down, left, right
-        point = pc2.read_points_list(self.point_cloud, field_names=("x", "y", "z"), skip_nans=True, uvs=[this_uv])[0]
-        self.get_logger().info(f'Searching for point around uv: {this_uv}')
-        iteration = 0
-        while point.x == 0.0 and point.y == 0.0 and point.z == 0.0:
-            iteration += 1
-            self.get_logger().info(f'Iteration {iteration}: No point found at uv: {this_uv}, checking surrounding pixels...')
-            # check up
-            if v > 0:
-                v -= 1
-                new_uv = u + v * width
-                point = pc2.read_points_list(self.point_cloud, field_names=("x", "y", "z"), skip_nans=True, uvs=[new_uv])[0]
-                if point.x != 0.0 or point.y != 0.0 or point.z != 0.0:
-                    return point
-            
-            # check down
-            if v < self.point_cloud.height - 1:
-                v += 1
-                new_uv = u + v * width
-                point = pc2.read_points_list(self.point_cloud, field_names=("x", "y", "z"), skip_nans=True, uvs=[new_uv])[0]
-                if point.x != 0.0 or point.y != 0.0 or point.z != 0.0:
-                    return point
-            
-            # check left
-            if u > 0:
-                u -= 1
-                new_uv = u + v * width
-                point = pc2.read_points_list(self.point_cloud, field_names=("x", "y", "z"), skip_nans=True, uvs=[new_uv])[0]
-                if point.x != 0.0 or point.y != 0.0 or point.z != 0.0:
-                    return point
-            
-            # check right
-            if u < self.point_cloud.width - 1:
-                u += 1
-                new_uv = u + v * width
-                point = pc2.read_points_list(self.point_cloud, field_names=("x", "y", "z"), skip_nans=True, uvs=[new_uv])[0]
-                if point.x != 0.0 or point.y != 0.0 or point.z != 0.0:
-                    return point
-        # if no point is found, return None
-        return None
-        
 
 
     def point_cloud_callback(self, msg):
@@ -263,10 +219,10 @@ class PoseDetectorNode(Node):
 
     def paint_markers(self):
         marker_array = MarkerArray()
-        joint_pitions = PoseArray()
-        joint_pitions.header.frame_id = "camera_depth_optical_frame"
-        # joint_pitions.header.frame_id = "lbr_link_0"
-        joint_pitions.header.stamp = self.get_clock().now().to_msg()
+        joint_positions = PoseArray()
+        joint_positions.header.frame_id = "camera_depth_optical_frame"
+        # joint_positions.header.frame_id = "lbr_link_0"
+        joint_positions.header.stamp = self.get_clock().now().to_msg()
         marker_id = 0
 
         if len(self.right_arm_3D) < 4:
@@ -276,7 +232,7 @@ class PoseDetectorNode(Node):
         for point in self.right_arm_3D:
             # print("point ", marker_id, " : ", point)
             marker = Marker()
-            joint_postion = Pose()
+            joint_position = Pose()
             marker.header.frame_id = "camera_depth_optical_frame"
             # marker.header.frame_id = "lbr_link_0"
             marker.header.stamp = rclpy.clock.Clock().now().to_msg()
@@ -285,11 +241,11 @@ class PoseDetectorNode(Node):
             marker.type = Marker.SPHERE
             marker.action = Marker.ADD
             marker.pose.position.x = float(point.x)
-            joint_postion.position.x = float(point.x)
+            joint_position.position.x = float(point.x)
             marker.pose.position.y = float(point.y)
-            joint_postion.position.y = float(point.y)
+            joint_position.position.y = float(point.y)
             marker.pose.position.z = float(point.z)
-            joint_postion.position.z = float(point.z)
+            joint_position.position.z = float(point.z)
             marker.scale.x = 0.05
             marker.scale.y = 0.05
             marker.scale.z = 0.05
@@ -303,9 +259,9 @@ class PoseDetectorNode(Node):
             text_marker.id = marker_id + 1000  # offset to avoid ID collision
             text_marker.type = Marker.TEXT_VIEW_FACING
             text_marker.action = Marker.ADD
-            text_marker.pose.position.x = float(point.x)
+            text_marker.pose.position.x = float(point.x) + 0.05
             text_marker.pose.position.y = float(point.y)
-            text_marker.pose.position.z = float(point.z) + 0.05  # put text slightly above sphere
+            text_marker.pose.position.z = float(point.z) # put text slightly above sphere
 
             text_marker.scale.z = 0.04  # height of text
             text_marker.color.a = 1.0
@@ -318,7 +274,7 @@ class PoseDetectorNode(Node):
 
             marker_array.markers.append(marker)
             marker_array.markers.append(text_marker)
-            joint_pitions.poses.append(joint_postion)
+            joint_positions.poses.append(joint_position)
 
 
             # Draw line strip connecting all right arm points
@@ -342,7 +298,7 @@ class PoseDetectorNode(Node):
             marker_array.markers.append(line_marker)
 
             self.marker_pub.publish(marker_array)
-            self.joint_position_pub.publish(joint_pitions)
+            self.joint_position_pub.publish(joint_positions)
 
     def image_callback(self, msg):
         self.image_hz = 1.0 / (self.get_clock().now() - self.image_last_time).nanoseconds*1e9

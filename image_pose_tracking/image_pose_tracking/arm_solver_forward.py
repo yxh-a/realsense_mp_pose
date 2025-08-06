@@ -288,7 +288,8 @@ class Arm_Solver_Node(Node):
 
         # self.get_logger().info(f"palm reach length: {np.linalg.norm(w):.2f} m")
         # solve last three degreee of freedom with w and v
-        theta_wrist_x, theta_wrist_y, theta_wrist_z = self.get_3DOF_joint_angles(v, w)
+        # theta_wrist_x, theta_wrist_y, theta_wrist_z = self.get_3DOF_joint_angles(v, w)
+        theta_wrist_x, theta_wrist_y, theta_wrist_z = 0.0, 0.0, 0.0
         # Publish the joint states
         self.publish_joint_states(theta_shoulder_x, theta_shoulder_y, theta_shoulder_z, theta_elbow_deg, theta_wrist_x, theta_wrist_y, theta_wrist_z)
 

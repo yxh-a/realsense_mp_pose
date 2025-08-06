@@ -14,11 +14,16 @@ find_package(pinocchio REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(NLOPT REQUIRED nlopt)
 
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
-add_executable(optimizer src/optimizer.cpp)
+add_executable(optimizer
+src/optimizer.cpp
+src/main.cpp
+)
 
 ament_target_dependencies(optimizer
   rclcpp
@@ -29,9 +34,15 @@ ament_target_dependencies(optimizer
   ament_index_cpp
 )
 
+target_include_directories(optimizer PRIVATE
+  include
+)
+
 target_link_libraries(optimizer
   ${catkin_LIBRARIES}
-  yaml-cpp)
+  yaml-cpp
+  ${NLOPT_LIBRARIES}
+)
 
 # Install the executable
 install(TARGETS optimizer
