@@ -13,6 +13,8 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <ament_index_cpp/get_package_share_directory.hpp>
+#include "std_msgs/msg/float32_multi_array.hpp"
+
 
 #include <Eigen/Dense>
 #include <Eigen/SVD>
@@ -65,11 +67,13 @@ public:
     pinocchio::framesForwardKinematics(arm_model_, arm_data_, q_arm_);
 
     arm_joint_sub_ = this->create_subscription<sensor_msgs::msg::JointState>(
-      "/arm/joint_states", 10,
+      "/optimized_arm/joint_states", 10,
       std::bind(&EndEffectorVelocityNode::jointCallback_arm, this, std::placeholders::_1));
     RCLCPP_INFO(this->get_logger(), "Subscribed to human arm joint states.");
     updated_arm_joint_states_pub_ = this->create_publisher<sensor_msgs::msg::JointState>(
       "/updated_arm/joint_states", 10);
+    joint_velocity_pub_ = this->create_publisher<std_msgs::msg::Float32MultiArray>(
+      "/arm/joint_velocities", 10);
 
     // Initialize static transformations
     // TF Hand-to-EE transform
@@ -229,8 +233,15 @@ private:
       return;
     }
     dq_arm_ = J_arm_pinv * v_hand_;
-    double dt = (this->now() - rclcpp::Time(msg->header.stamp)).seconds();
-    q_arm_ += dq_arm_ * dt;
+    // double dt = (this->now() - rclcpp::Time(msg->header.stamp)).seconds();
+    // q_arm_ += dq_arm_ * dt;
+    std_msgs::msg::Float32MultiArray joint_velocities_msg;
+    joint_velocities_msg.data.resize(arm_model_.nv);
+    for (size_t i = 0; i < arm_model_.nv; ++i)
+    {
+      joint_velocities_msg.data[i] = dq_arm_[i]/M_PI*180.0;  // Convert to degrees
+    }
+    joint_velocity_pub_->publish(joint_velocities_msg);
   }
 
   void jointCallback_arm(const sensor_msgs::msg::JointState::SharedPtr msg)
@@ -245,22 +256,22 @@ private:
     pinocchio::forwardKinematics(arm_model_, arm_data_, q_arm_);
     pinocchio::updateFramePlacements(arm_model_, arm_data_);
 
-    // safe joint names once
-    if (updated_arm_joint_states_pub_->get_subscription_count() > 0)
-    {
-      sensor_msgs::msg::JointState updated_joint_states;
-      updated_joint_states.header = msg->header;
-      updated_joint_states.name = msg->name;  // Assuming the names are the same
-      updated_joint_states.position.resize(q_arm_.size());
-      updated_joint_states.velocity.resize(q_arm_.size());
-      for (size_t i = 0; i < q_arm_.size(); ++i)
-      {
-        updated_joint_states.position[i] = q_arm_[i];
-        updated_joint_states.velocity[i] = dq_arm_[i];
-      }
-      updated_arm_joint_states_pub_->publish(updated_joint_states);
-      // RCLCPP_INFO(this->get_logger(), "Published updated arm joint states.");
-    }
+    // // safe joint names once
+    // if (updated_arm_joint_states_pub_->get_subscription_count() > 0)
+    // {
+    //   sensor_msgs::msg::JointState updated_joint_states;
+    //   updated_joint_states.header = msg->header;
+    //   updated_joint_states.name = msg->name;  // Assuming the names are the same
+    //   updated_joint_states.position.resize(q_arm_.size());
+    //   updated_joint_states.velocity.resize(q_arm_.size());
+    //   for (size_t i = 0; i < q_arm_.size(); ++i)
+    //   {
+    //     updated_joint_states.position[i] = q_arm_[i];
+    //     updated_joint_states.velocity[i] = dq_arm_[i];
+    //   }
+    //   updated_arm_joint_states_pub_->publish(updated_joint_states);
+    //   // RCLCPP_INFO(this->get_logger(), "Published updated arm joint states.");
+    // }
   }
 
   bool isValidTransform(const pinocchio::SE3 &T)
@@ -287,7 +298,7 @@ private:
   rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr twist_pub_;
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr arm_joint_sub_;
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr updated_arm_joint_states_pub_;
-
+  rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr joint_velocity_pub_;
 };
 
 int main(int argc, char **argv)

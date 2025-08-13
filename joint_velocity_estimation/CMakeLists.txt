@@ -24,6 +24,7 @@ ament_target_dependencies(joint_velocity_estimator
   rclcpp
   geometry_msgs
   tf2_geometry_msgs
+  std_msgs
   pinocchio
   sensor_msgs
   ament_index_cpp
