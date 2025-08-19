@@ -74,31 +74,31 @@
         <inertial>
             <mass value="2.181"/>
 			<!--COM origin wrt jRightShoulder-->
-            <origin xyz="0    -0.16437           0" rpy="0 0 0" />
+            <origin xyz="0    -0.125           0" rpy="0 0 0" />
             <inertia ixx="0.020332" iyy="0.0013806" izz="0.020332" ixy="0" ixz="0" iyz="0"/>
         </inertial>
 
         <visual>
 			<!--box origin wrt jRightShoulder. RPY rotated of pi/2.-->
-            <origin xyz="0    -0.16437           0" rpy="1.5708 0 0" />
+            <origin xyz="0    -0.125           0" rpy="1.5708 0 0" />
             <geometry>
-                <cylinder length="0.2" radius="0.035581"/>
+                <cylinder length="0.25" radius="0.035581"/>
             </geometry>
             <material name="color"/>
         </visual>
 
         <collision>
 			<!--box origin wrt jRightShoulder. RPY rotated of pi/2.-->
-            <origin xyz="0    -0.16437           0" rpy="1.5708 0 0" />
+            <origin xyz="0    -0.125           0" rpy="1.5708 0 0" />
             <geometry>
-                <cylinder length="0.24" radius="0.035581"/>
+                <cylinder length="0.25" radius="0.035581"/>
             </geometry>
         </collision>
 
     </link>
 
     <joint name="jRightElbow_rotz" type="revolute">
-        <origin xyz="0 -0.24 0" rpy="0 0 0"/>
+        <origin xyz="0 -0.25 0" rpy="0 0 0"/>
         <parent link="RightUpperArm"/>
         <child link="RightForeArm"/>
         <dynamics damping="0.1" friction="0.0"/>
@@ -110,31 +110,31 @@
         <inertial>
             <mass value="1.454"/>
 			<!--COM origin wrt jRightElbow-->
-            <origin xyz="0    -0.135           0" rpy="0 0 0" />
+            <origin xyz="0    -0.112           0" rpy="0 0 0" />
             <inertia ixx="0.008948" iyy="0.00040906" izz="0.008948" ixy="0" ixz="0" iyz="0"/>
         </inertial>
 
         <visual>
 			<!--box origin wrt jRightElbow. RPY rotated of pi/2.-->
-            <origin xyz="0    -0.135           0" rpy="1.5708 0 0" />
+            <origin xyz="0    -0.112           0" rpy="1.5708 0 0" />
             <geometry>
-                <cylinder length="0.27" radius="0.023721"/>
+                <cylinder length="0.224" radius="0.023721"/>
             </geometry>
             <material name="color"/>
         </visual>
 
         <collision>
 			<!--box origin wrt jRightElbow. RPY rotated of pi/2.-->
-            <origin xyz="0    -0.135           0" rpy="1.5708 0 0" />
+            <origin xyz="0    -0.112           0" rpy="1.5708 0 0" />
             <geometry>
-                <cylinder length="0.27" radius="0.023721"/>
+                <cylinder length="0.224" radius="0.023721"/>
             </geometry>
         </collision>
 
     </link>
     
     <joint name="jRightElbow_roty" type="revolute">
-        <origin xyz="0 -0.27 0" rpy="0 0 0"/>
+        <origin xyz="0 -0.224 0" rpy="0 0 0"/>
         <parent link="RightForeArm"/>
         <child link="RightForeArm_f1"/>
         <dynamics damping="0.1" friction="0.0"/>

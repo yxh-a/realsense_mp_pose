@@ -32,7 +32,10 @@ private:
     pinocchio::Model model_;
     pinocchio::Data data_;
     std::vector<std::string> joint_names_;
-    Eigen::VectorXd q_init_, q;
+    Eigen::VectorXd q_init_, q, q_prev_, q_prev2_;
+    bool have_prev_, have_prev2_;
+    double w_vel_, w_acc_;
+
     // Transforms
     Eigen::Isometry3d hand_to_ee_, ee_to_hand_;
     pinocchio::SE3 T_shoulder_hand, T_shoulder_hand_ref, T_base_hand, T_base_shoulder;
@@ -46,6 +49,9 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub_;
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_publisher_;
     geometry_msgs::msg::TransformStamped tf_shoulder2ee;
+
+    // time keeper
+    rclcpp::Time last_update_time_;
 
     // optimization parameters
     nlopt_opt opt_;

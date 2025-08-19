@@ -5,8 +5,6 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 from ament_index_python.packages import get_package_share_directory
 import os
-from std_msgs.msg import Float64MultiArray
-from tf2_ros import Buffer, TransformListener
 from sensor_msgs.msg import JointState
 from tf2_geometry_msgs import TransformStamped
 # from urdfpy import URDF
@@ -73,20 +71,45 @@ class Arm_Solver_Node(Node):
         }
         self.joint_angles_buffer_size = 5  # size of the buffer for median filter
 
-        # set up the transform listener to listen for EE frame, which is coupled to the hand frame
-        self.tf_buffer = Buffer()
-        self.tf_listener = TransformListener(self.tf_buffer, self)
+        self.old_4dof_angles = np.zeros(4)  # to store the previous 4 DoF angles
 
-        # # Wait for the transform to be available
-        self.get_logger().info("Waiting for transform from camera to shoulder frame...")
-        try:
-            self.tf_buffer.can_transform('camera_depth_optical_frame', 'lbr_link_ee', rclpy.time.Time(), timeout_sec=10.0)
-            self.get_logger().info("Transform from camera to shoulder frame is available.")
-        except Exception as e:
-            self.get_logger().error(f"Transform not available: {e}")
-            return
+        # setup phyiscal constraints
+        self.physical_constraints = {
+            # Shoulder (3 DoF)
+            'theta_shoulder_x': (-2.35619,  1.5708),   # (-135°,   90°)  jRightShoulder_rotx
+            'theta_shoulder_z': (-0.785398, 3.14159),  # ( -45°,  180°)  jRightShoulder_rotz
+            'theta_shoulder_y': (-1.5708,   1.5708),   # ( -90°,   90°)  jRightShoulder_roty
+
+            # Elbow (2 DoF)
+            'theta_elbow_z':    (0.0,       2.53073),  # (   0°,  145°)  jRightElbow_rotz
+            'theta_elbow_y':    (-1.5708,   1.48353),  # ( -90°,   85°)  jRightElbow_roty
+
+            # Wrist (2 DoF)
+            'theta_wrist_x':    (-0.872665, 1.0472),   # ( -50°,   60°)  jRightWrist_rotx
+            'theta_wrist_z':    (-0.523599, 0.349066), # ( -30°,   20°)  jRightWrist_rotz
+
+        }
+        self.joint_velocity_limits = {
+            # Shoulder: keep around ≈ 170–200°/s to match fast ADLs / isokinetic tests, well below sport extremes
+            'theta_shoulder_x': 3.0,   # ≈ 172°/s
+            'theta_shoulder_z': 3.5,   # ≈ 201°/s (IR/ER tends to be quickest) 
+            'theta_shoulder_y': 3.0,   # ≈ 172°/s
+
+            # Elbow: flex/extend can move quickly in tasks; set a bit higher
+            'theta_elbow_z':    4.0,   # ≈ 229°/s
+            'theta_elbow_y':    3.0,   # ≈ 172°/s
+
+            # Wrist: often tested at 150–210°/s in isokinetic protocols — keep similar/under
+            'theta_wrist_x':    3.5,   # ≈ 201°/s (flex/extend)
+            'theta_wrist_z':    2.0,   # ≈ 115°/s (deviation/axial at wrist—more conservative)
+        }
+        
+        # setup timer
+        self.time = self.get_clock().now()
+        self.dt = 0.0
 
         
+
         self.get_logger().info("URDF file loaded successfully.")
         self.get_logger().info("IK Solver Node Initialized")
     
@@ -112,13 +135,14 @@ class Arm_Solver_Node(Node):
             self.joint_angles_buffer['theta_wrist_y'].pop(0)
             self.joint_angles_buffer['theta_wrist_z'].pop(0)
 
-        theta_shoulder_x = np.median(self.joint_angles_buffer['theta_shoulder_x'])
-        theta_shoulder_y = np.median(self.joint_angles_buffer['theta_shoulder_y'])
-        theta_shoulder_z = np.median(self.joint_angles_buffer['theta_shoulder_z'])
-        theta_elbow = np.median(self.joint_angles_buffer['theta_elbow'])
-        theta_wrist_x = np.median(self.joint_angles_buffer['theta_wrist_x'])
-        theta_wrist_y = np.median(self.joint_angles_buffer['theta_wrist_y'])
-        theta_wrist_z = np.median(self.joint_angles_buffer['theta_wrist_z'])
+        theta_shoulder_x = np.mean(self.joint_angles_buffer['theta_shoulder_x'])
+        theta_shoulder_y = np.mean(self.joint_angles_buffer['theta_shoulder_y'])
+        theta_shoulder_z = np.mean(self.joint_angles_buffer['theta_shoulder_z'])
+        theta_elbow = np.mean(self.joint_angles_buffer['theta_elbow'])
+        theta_wrist_x = np.mean(self.joint_angles_buffer['theta_wrist_x'])
+        theta_wrist_y = np.mean(self.joint_angles_buffer['theta_wrist_y'])
+        theta_wrist_z = np.mean(self.joint_angles_buffer['theta_wrist_z'])
+        
     
         # pbulish joint states
         joint_states = JointState()
@@ -144,8 +168,13 @@ class Arm_Solver_Node(Node):
       
         # self.get_logger().info(f"Publishing joint states: {joint_states.position}")
         self.joint_state_publisher.publish(joint_states)
+
     def get_4DOF_joint_angles(self, u, v):
 
+        # check if u and v are valid vectors
+        if u is None or v is None or np.linalg.norm(u) < 1e-6 or np.linalg.norm(v) < 1e-6:
+            self.get_logger().error("Invalid vectors for joint angle calculation.")
+            return 0, 0, 0, 0
         # get elbow angle
         theta_elbow = np.arccos(np.dot(u, v) / (np.linalg.norm(u) * np.linalg.norm(v)))
         theta_elbow_deg = np.degrees(theta_elbow)
@@ -191,44 +220,17 @@ class Arm_Solver_Node(Node):
 
         return theta_shoulder_x, theta_shoulder_y, theta_shoulder_z, theta_elbow_deg    
     
-    def get_3DOF_joint_angles(self, v, w):
-        # normalize the vectors
-        v_normalized = normalize(v)
-        w_normalized = normalize(w)
-
-        Rxz_wrist = rotation_from_vector_to_vector(v_normalized, w_normalized)
-        # check if Rxz_wrist is a valid rotation matrix
-        if not np.allclose(np.linalg.det(Rxz_wrist), 1.0):
-            self.get_logger().error("Invalid rotation matrix from upper arm vector to wrist vector.")
-            return
-        else:
-            # self.get_logger().info(f"Rotation matrix from upper arm vector to wrist vector:\n{Rxz_wrist}")
-            rxz = R.from_matrix(Rxz_wrist)
-            theta_wrist_x, theta_y_temp, theta_wrist_z = rxz.as_euler('xyz', degrees=True)
-            # self.get_logger().info(f"Wrist angles: x: {theta_wrist_x:.2f} degrees, z: {theta_wrist_z:.2f} degrees")
-
-        # project w onto the plane orthogonal to v
-        w_proj = w_normalized - np.dot(w_normalized, v_normalized) * v_normalized
-        if np.linalg.norm(w_proj) < 1e-6:
-            theta_wrist_y = 0.0
-            self.get_logger().warn("Wrist is aligned with the upper arm, cannot determine wrist y angle.")
-            return theta_wrist_x, theta_wrist_y, theta_wrist_z
-        else:
-            w_proj_normalized = normalize(w_proj)
-            
-            # reference Rxz with y = 0
-            Rxz_wrist_ref = R.from_euler('xyz', [theta_wrist_x, 0.0, theta_wrist_z], degrees=True).as_matrix()
-            x_wrist_ref = Rxz_wrist_ref @ np.array([1, 0, 0])  # x-axis in the wrist frame
-            angle = np.arccos(np.clip(np.dot(x_wrist_ref, w_proj_normalized), -1.0, 1.0))
-            if np.dot(w_proj_normalized, np.array([0, 1, 0])) < 0:
-                angle = -angle
-            theta_wrist_y = np.degrees(angle)
-
-        # return theta_wrist_x, theta_wrist_y, theta_wrist_z
-        return 0.0, 0.0, 0.0 
-    
+    def physical_constraints(self, theta_shoulder_x, theta_shoulder_y, theta_shoulder_z, theta_elbow_deg):
+        # this function checks if the calculated joint angles are within the physical constraints of the robot arm,
+        # nmaely 1. if the angles are within the range of motion of the joints
+        # 2. if the motion is continuous, i.e. limit the change of angles between frames
+        return
 
     def pose_callback(self, msg: PoseArray):
+        
+        self.dt = (self.time - self.get_clock().now()).nanoseconds * 1e-9  # convert to seconds
+        self.time = self.get_clock().now()
+
         if len(msg.poses) < 3:
             # self.get_logger().warn("Received insufficient poses for IK calculation.")
             return
@@ -266,25 +268,6 @@ class Arm_Solver_Node(Node):
 
 
         theta_shoulder_x, theta_shoulder_y, theta_shoulder_z, theta_elbow_deg = self.get_4DOF_joint_angles(u, v)
-
-        
-        # get EE frame which is coupled to the hand frame
-        EE_tranform = TransformStamped()
-        try:
-            EE_transform = self.tf_buffer.lookup_transform('camera_depth_optical_frame','lbr_link_ee', rclpy.time.Time())
-        except Exception as e:
-            self.get_logger().error(f"Failed to get transform from camera to EE frame: {e}")
-            return
-        # self.get_logger().info(f"EE transform: {EE_transform}")
-        EE_translation = np.array([
-            EE_transform.transform.translation.x,
-            EE_transform.transform.translation.y,
-            EE_transform.transform.translation.z
-        ])
-        EE_translation = self.transform_to_shoulder_frame(EE_translation)
-
-        # now get the vector of the wrist to the EE frame
-        w = EE_translation - self.wrist_translation
 
         # self.get_logger().info(f"palm reach length: {np.linalg.norm(w):.2f} m")
         # solve last three degreee of freedom with w and v

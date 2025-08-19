@@ -111,23 +111,6 @@ class PoseDetectorNode(Node):
         if cloud_point.x == 0.0 and cloud_point.y == 0.0 and cloud_point.z == 0.0:
             # self.get_logger().warn(f'Point at index {index} is (0,0,0), retaining old point')
             return old_point
-        
-        # check if the point is initialized
-        # if not self.point_initialized[index]:
-        #     if float(cloud_point.x) != 0.0 and float(cloud_point.y) != 0.0 and float(cloud_point.z) != 0.0:
-        #         # if the point is not initialized, set it to the new point
-        #         self.get_logger().info(f'Point at index {index} is not initialized, setting to new point')
-        #         self.point_initialized[index] = True
-        #         return cloud_point
-        
-        # # check if the new point is too far from the old point
-        # distance = np.sqrt((cloud_point.x - old_point.x) ** 2 + (cloud_point.y - old_point.y) ** 2 + (cloud_point.z - old_point.z) ** 2)
-        # if distance > 0.5:  # threshold of 0.5 meters
-        #     # self.get_logger().warn(f'Point at index {index} is too far from old point, retaining old point')
-        #     return old_point
-        
-        # if the point is valid, return the new point
-        # self.get_logger().info(f'Point at index {index} is valid, updating point [{cloud_point.x}, {cloud_point.y}, {cloud_point.z}]')
         return cloud_point
 
     def point_from_uv(self, u, v):
@@ -204,19 +187,6 @@ class PoseDetectorNode(Node):
         except Exception as e:
             self.get_logger().error('Error Processing Point Cloud: {}'.format(e))
     
-    def process_point_cloud(self):
-        # this function will be called in the image callback, it grabs the latest point cloud in memory and get pose data
-        # self.get_logger().info('Processing Point Cloud')
-        # get the latest point cloud on self.point_cloud_topic
-        self.point_cloud = rclpy.wait_for_message(self.point_cloud_topic, PointCloud2, timeout_sec=0.1)
-        if self.point_cloud is None:
-            self.get_logger().error('No Point Cloud Received')
-            return
-        try:
-            self.publish_markers()
-        except Exception as e:
-            self.get_logger().error('Error Processing Point Cloud: {}'.format(e))
-
     def paint_markers(self):
         marker_array = MarkerArray()
         joint_positions = PoseArray()
@@ -297,8 +267,8 @@ class PoseDetectorNode(Node):
 
             marker_array.markers.append(line_marker)
 
-            self.marker_pub.publish(marker_array)
-            self.joint_position_pub.publish(joint_positions)
+        self.marker_pub.publish(marker_array)
+        self.joint_position_pub.publish(joint_positions)
 
     def image_callback(self, msg):
         self.image_hz = 1.0 / (self.get_clock().now() - self.image_last_time).nanoseconds*1e9
@@ -314,6 +284,9 @@ class PoseDetectorNode(Node):
             # process the image with mediapipe
             self.rgb_image = cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2RGB)
             
+            # save image to local
+            # cv2.imwrite('/home/yuxuan_cor/pose_ws/src/image_pose_tracking/image_pose_tracking/test_image.jpg', self.cv_image)
+
             # Process Image with MediaPipe Pose Detection
             self.results = self.pose.process(self.rgb_image)
             

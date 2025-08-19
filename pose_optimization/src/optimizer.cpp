@@ -29,6 +29,10 @@ PoseOptimizer::PoseOptimizer()
 
     q = Eigen::VectorXd::Zero(model_.nq);
     q_init_ = q; // Initialize with zero joint angles
+    q_prev_ = q;
+    q_prev2_ = q;
+    have_prev_ = false;
+    have_prev2_ = false;
     
     RCLCPP_INFO(this->get_logger(), "Robot model loaded with %d DOF", model_.nq);
     RCLCPP_INFO(this->get_logger(), "Joint names: %s", 
@@ -88,6 +92,8 @@ PoseOptimizer::PoseOptimizer()
         pos_weight = config["NLopt"]["pos_weight"].as<double>(10.0);
         rot_weight = config["NLopt"]["rot_weight"].as<double>(1.0);
         joint_weights = config["NLopt"]["joint_weights"].as<std::vector<double>>();
+        w_vel_ = config["NLopt"]["velocity_weight"].as<double>(5.0);
+        w_acc_ = config["NLopt"]["acceleration_weight"].as<double>(1.0);
         // normalize joint weights to have a sum of 1
         double sum_weights = std::accumulate(joint_weights.begin(), joint_weights.end(), 0.0);
         if (sum_weights > 0)
@@ -107,6 +113,7 @@ PoseOptimizer::PoseOptimizer()
         nlopt_set_min_objective(opt_, PoseOptimizer::costFunction, this);
         nlopt_set_xtol_rel(opt_, tolerance);
         nlopt_set_maxeval(opt_, max_iterations);
+
         RCLCPP_INFO(this->get_logger(), "NLopt optimization initialized.");
 
     }
@@ -148,6 +155,10 @@ PoseOptimizer::PoseOptimizer()
     joint_state_sub_ = this->create_subscription<sensor_msgs::msg::JointState>(
         "/arm/joint_states", 10, std::bind(&PoseOptimizer::joint_state_callback, this, std::placeholders::_1));
 
+    // initialize timer
+    last_update_time_ = this->get_clock()->now();
+    RCLCPP_INFO(this->get_logger(), "PoseOptimizer initialized successfully");
+
 }
 
 
@@ -178,8 +189,25 @@ double PoseOptimizer::costFunction(unsigned n, const double* x, double* grad, vo
 
     }
 
-    return pose_cost + self->joint_penalty_weight * joint_cost;
+    // soft constraint on smooth movement
+    double smooth_cost = 0.0;
+    if (self->have_prev_) {
+        for (int i = 0; i < 7; ++i) {
+            double dv = q[i] - self->q_prev_[i];
+            smooth_cost += self->w_vel_ * dv * dv;
+        }
+        if (self->have_prev2_) {
+            for (int i = 0; i < 7; ++i) {
+                double da = q[i] - 2.0*self->q_prev_[i] + self->q_prev2_[i];
+                smooth_cost += self->w_acc_ * da * da;
+            }
+        }
+    }
+
+
+    return pose_cost + self->joint_penalty_weight * joint_cost + smooth_cost;
 }
+
 
 void PoseOptimizer::joint_state_callback(const sensor_msgs::msg::JointState::SharedPtr msg)
 {   
@@ -368,6 +396,7 @@ void PoseOptimizer::joint_state_callback(const sensor_msgs::msg::JointState::Sha
                 break;
             }
             q = q + dq;
+
         }
     }
     // RCLCPP_INFO(this->get_logger(), "SVD optimization completed");
@@ -390,8 +419,29 @@ void PoseOptimizer::joint_state_callback(const sensor_msgs::msg::JointState::Sha
     {   
         if (!std::isfinite(q[i])) {
             RCLCPP_ERROR(this->get_logger(), "Non-finite value in joint %s: %f", joint_names_[i].c_str(), q[i]);
-            return;}
+            return;
+        }
         optimized_joint_state.position[i] = q[i];
     }
+
+    optimized_joint_state.velocity.resize(model_.nq, 0.0); // Set velocities to zero
+    // calculate the velocity of each joint bbased on q and q_prev_
+    if (have_prev_) {
+        double dt = (this->now() - last_update_time_).seconds();
+        for (size_t i = 0; i < model_.nq; ++i) {
+            optimized_joint_state.velocity[i] = (q[i] - q_prev_[i]) / dt;
+        }
+    }
+    last_update_time_ = this->now(); // Update the last update time
+
     joint_state_publisher_->publish(optimized_joint_state);
+
+    // update previous joint states
+    if (have_prev_) {
+        q_prev2_ = q_prev_;
+        have_prev2_ = true;
+    }
+    q_prev_ = q;
+    have_prev_ = true;
+
 }

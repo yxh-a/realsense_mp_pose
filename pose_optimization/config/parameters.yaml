@@ -17,12 +17,14 @@ operational:
     baseline_hz: 20  # Baseline frequency for optimization
 NLopt:
   algorithm: "LN_COBYLA"  # Optimization algorithm to use, e.g., "LD_LBFGS", "LN_COBYLA"
-  max_iterations: 500  # Maximum iterations for NLopt
+  max_iterations: 200  # Maximum iterations for NLopt
   tolerance: 1e-4  # Tolerance for convergence
   pos_weight: 10.0  # Weight for position error in cost function
   rot_weight: 1.0  # Weight for rotation error in cost function
-  joint_weights: [10, 10, 10, 10, 1.0, 1.0, 1.0]  # Weights for joint angles
+  joint_weights: [1, 1, 1, 1, 0.0, 0.0, 0.0]  # Weights for joint angles
   joint_penalty_weight: 1.0  # Penalty weight for joint angles
+  acceleration_weight: 1.0  # Weight for acceleration in cost function
+  velocity_weight: 1.0  # Weight for velocity in cost function
 
 SVD:
   max_iterations: 100  # Maximum iterations for SVD
