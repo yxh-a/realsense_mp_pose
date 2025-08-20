@@ -1,0 +1,40 @@
+parameters:
+  # ===== Core KF (state x = [dq, ddq]) =====
+  kf:
+    q_dq: 1.0e-3            # process noise on dq   (rad/s)^2 per tick
+    q_ddq: 1.0e-1           # process noise on ddq  (rad/s^2)^2 per tick
+
+    control_rate_hz: 200.0  # used to set KF dt (fallback if timestamp deltas look bad)
+
+  # ===== Task-space "measurement" (dq_task = J# * v_hand) =====
+  task_measurement:
+    sigma_min: 0.20
+    sigma_max: 1.00
+    v0: 0.05                     # scale: bigger vnorm => closer to sigma_min
+
+  # ===== Vision joint-velocity measurement (dq_vis) =====
+  vision_measurement:
+    freshness_max_sec: 0.20       # ignore frames older than this
+    use_confidence: false         # set true if last element of message is confidence in [0,1]
+    sigma_vis: 0.25               # constant vision noise (rad/s). Used when use_confidence=false
+    sigma_vis_base: 0.50          # (optional) used if use_confidence=true -> sigma = base / max(conf, eps)
+
+  # ===== Measurement gating (spike rejection) =====
+  gating:
+    enabled: true
+    d2_max: 25.0                  # Mahalanobis distance gate for dq measurements
+
+
+  # ===== Pseudoinverse weighting/damping (optional) =====
+  pinv:
+    use_weighting: false
+    W_diag: [1, 1, 1, 1, 1, 1, 1] # per-joint weights (only if use_weighting=true)
+    damping_lambda: 0.00          # 0 for plain pseudo-inverse; >0 for damped least-squares
+
+  # ===== Outputs =====
+  output:
+    print_velocity: true  # print joint velocities to console
+    print_sigmas: true  # print measurement and task sigmas to console
+   
+
+  

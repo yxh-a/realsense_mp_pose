@@ -201,7 +201,6 @@ Visualization Manager:
       Name: MarkerArray
       Namespaces:
         "": true
-        right_arm_line: true
         right_arm_text: true
       Topic:
         Depth: 5
@@ -298,7 +297,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /optimized_arm/robot_description
+        Value: /updated_arm/robot_description
       Enabled: true
       Links:
         All Links Enabled: true

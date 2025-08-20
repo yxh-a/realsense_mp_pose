@@ -314,7 +314,12 @@ void PoseOptimizer::joint_state_callback(const sensor_msgs::msg::JointState::Sha
             x[i] = q[i]; // initialize with current joint angles
         }
         nlopt_result result = nlopt_optimize(opt_, x.data(), &minf);
-        RCLCPP_INFO(this->get_logger(), "NLopt result = %d, final cost = %.6f", result, minf);
+        if (print_error_after_loop)
+        {
+            RCLCPP_INFO(this->get_logger(), "NLopt result = %d, final cost = %.6f", result, minf);
+            RCLCPP_INFO(this->get_logger(), "Converged after %d iterations", nlopt_get_numevals(opt_));
+        }
+
         if (print_joint_angles)
         {
             RCLCPP_INFO(this->get_logger(), "Initial joint angles: %f, %f, %f, %f, %f, %f, %f",
@@ -401,16 +406,6 @@ void PoseOptimizer::joint_state_callback(const sensor_msgs::msg::JointState::Sha
     }
     // RCLCPP_INFO(this->get_logger(), "SVD optimization completed");
     // publish the optimized joint states
-    if (print_error_after_loop)
-    {
-        pinocchio::forwardKinematics(model_, data_, q);
-        pinocchio::updateFramePlacements(model_, data_);
-        T_shoulder_hand = data_.oMf[hand_idx];
-        pinocchio::SE3 delta_T = T_shoulder_hand_ref.inverse() * T_shoulder_hand;
-        pinocchio::Motion final_error_twist = pinocchio::log6(delta_T);
-        RCLCPP_INFO(this->get_logger(), "Final error norm: %.6f", final_error_twist.toVector().norm());
-    }
-
     sensor_msgs::msg::JointState optimized_joint_state;
     optimized_joint_state.header.stamp = this->get_clock()->now();
     optimized_joint_state.name = joint_names_;

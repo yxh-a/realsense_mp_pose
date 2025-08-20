@@ -15,6 +15,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(PkgConfig REQUIRED)
+
 pkg_check_modules(NLOPT REQUIRED nlopt)
 
 # uncomment the following section in order to fill in

@@ -11,14 +11,14 @@ operational:
 
     print_error_before_loop: false  # Print error before optimization loop
     print_error_in_loop: false  # Print error after optimization loop
-    print_error_after_loop: true  # Print error after optimization loop
+    print_error_after_loop: false  # Print error after optimization loop
     print_joint_angles: false  # Print joint angles during optimization
 
     baseline_hz: 20  # Baseline frequency for optimization
 NLopt:
   algorithm: "LN_COBYLA"  # Optimization algorithm to use, e.g., "LD_LBFGS", "LN_COBYLA"
-  max_iterations: 200  # Maximum iterations for NLopt
-  tolerance: 1e-4  # Tolerance for convergence
+  max_iterations: 500  # Maximum iterations for NLopt
+  tolerance: 1e-2  # Tolerance for convergence
   pos_weight: 10.0  # Weight for position error in cost function
   rot_weight: 1.0  # Weight for rotation error in cost function
   joint_weights: [1, 1, 1, 1, 0.0, 0.0, 0.0]  # Weights for joint angles
