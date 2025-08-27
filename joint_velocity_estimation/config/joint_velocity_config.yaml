@@ -33,8 +33,9 @@ parameters:
 
   # ===== Outputs =====
   output:
-    print_velocity: true  # print joint velocities to console
-    print_sigmas: true  # print measurement and task sigmas to console
+    print_velocity: false  # print joint velocities to console
+    print_sigmas: false  # print measurement and task sigmas to console
    
 
-  
+  visualizer:
+    static_transformation: [0.400, -0.125, 0.09, -0.70710678, 0, 0, 0.70710678]

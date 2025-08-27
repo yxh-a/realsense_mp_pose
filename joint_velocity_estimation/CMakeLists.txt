@@ -14,11 +14,15 @@ find_package(pinocchio REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(trajectory_msgs REQUIRED)
+find_package(moveit_msgs REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
 
 add_executable(joint_velocity_estimator src/joint_velocity_estimator.cpp)
+
+add_executable(trajectory_visualizer src/trajectory_visualizer.cpp)
 
 ament_target_dependencies(joint_velocity_estimator
   rclcpp
@@ -30,7 +34,20 @@ ament_target_dependencies(joint_velocity_estimator
   ament_index_cpp
 )
 
+ament_target_dependencies(trajectory_visualizer
+  rclcpp
+  sensor_msgs
+  trajectory_msgs
+  geometry_msgs
+  moveit_msgs
+  ament_index_cpp
+)
+
 target_link_libraries(joint_velocity_estimator
+  ${catkin_LIBRARIES}
+  yaml-cpp)
+
+target_link_libraries(trajectory_visualizer
   ${catkin_LIBRARIES}
   yaml-cpp)
   
@@ -40,6 +57,9 @@ target_include_directories(joint_velocity_estimator PUBLIC
 target_compile_features(joint_velocity_estimator PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 
 install(TARGETS joint_velocity_estimator
+  DESTINATION lib/${PROJECT_NAME})
+
+install(TARGETS trajectory_visualizer
   DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY config/

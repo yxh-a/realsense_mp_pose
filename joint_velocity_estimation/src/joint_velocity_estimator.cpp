@@ -316,7 +316,7 @@ private:
     sensor_msgs::msg::JointState updated_arm_joint_state;
     updated_arm_joint_state.header.stamp = this->now();
     updated_arm_joint_state.name = arm_model_.names;
-    Eigen::VectorXd q_arm_updated = q_arm_ + dq_arm_ * (1); //
+    Eigen::VectorXd q_arm_updated = q_arm_;
     updated_arm_joint_state.position = std::vector<double>(q_arm_.data(), q_arm_.data() + q_arm_.size());
     updated_arm_joint_state.velocity = std::vector<double>(dq_arm_.data(), dq_arm_.data() + dq_arm_.size());
     
