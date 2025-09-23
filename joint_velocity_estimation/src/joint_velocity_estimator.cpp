@@ -113,48 +113,7 @@ public:
     T_eehand_.translation() = translation;
 
     T_handee_ = T_eehand_.inverse();
-
-    // TF Robot to Camera transform
-    if (!config["world2camera"])
-    {
-      RCLCPP_ERROR(this->get_logger(), "world2camera configuration not found in %s", config_path);
-      return;
-    }
-    translation = Eigen::Vector3d::Zero();
-    if (config["world2camera"]["translation"])
-    {
-      translation = Eigen::Vector3d(
-          config["world2camera"]["translation"][0].as<double>(),
-          config["world2camera"]["translation"][1].as<double>(),
-          config["world2camera"]["translation"][2].as<double>()
-      );
-    }
-    rotation = Eigen::Vector3d::Zero();
-    if (config["world2camera"]["rotation"])
-    {
-      rotation = Eigen::Vector3d(
-          config["world2camera"]["rotation"][0].as<double>(),
-          config["world2camera"]["rotation"][1].as<double>(),
-          config["world2camera"]["rotation"][2].as<double>()
-      );
-    }
-    T_worldcamera_ = pinocchio::SE3::Identity();
-    R = Eigen::AngleAxisd(rotation[0], Eigen::Vector3d::UnitX()).toRotationMatrix()
-        * Eigen::AngleAxisd(rotation[1], Eigen::Vector3d::UnitY()).toRotationMatrix()
-        * Eigen::AngleAxisd(rotation[2], Eigen::Vector3d::UnitZ()).toRotationMatrix();
-    T_worldcamera_.rotation() = R;
-    T_worldcamera_.translation() = translation;
-    RCLCPP_INFO(this->get_logger(), "Robot to Camera transform initialized");
-
-    // TF Camera to Shoulder transform can be read from arm_model_
-    T_camerashoulder_ = arm_data_.oMf[arm_model_.getFrameId("RightShoulder")];
-    if (!T_camerashoulder_.rotation().allFinite() || !T_camerashoulder_.translation().allFinite())
-    {
-      RCLCPP_ERROR(this->get_logger(), "Invalid Camera to Shoulder transform (NaNs detected)");
-      return;
-    }
-    T_worldshoulder_ = T_worldcamera_ * T_camerashoulder_;
-
+    
     // initialize Kalman filter
     RCLCPP_INFO(this->get_logger(), "Initializing Kalman filter...");
     std::string kf_config_path = ament_index_cpp::get_package_share_directory("joint_velocity_estimation") + "/config/joint_velocity_config.yaml";
@@ -191,6 +150,34 @@ public:
       RCLCPP_INFO(this->get_logger(), "Output configuration: print_velocity = %s", print_velocity_ ? "true" : "false");
       RCLCPP_INFO(this->get_logger(), "Output configuration: print_sigmas = %s", print_sigmas_ ? "true" : "false");
     }
+    
+    // TF Robot to Camera transform
+    T_worldcamera_ = pinocchio::SE3::Identity();
+    if (kf_config["parameters"]["visualizer"]["static_transformation"]) {
+      const auto& trans = kf_config["parameters"]["visualizer"]["static_transformation"];
+      if (trans.size() == 7) {
+        T_worldcamera_.translation() <<
+            trans[0].as<double>(), trans[1].as<double>(), trans[2].as<double>();
+        Eigen::Quaterniond q(
+            trans[6].as<double>(), trans[3].as<double>(),
+            trans[4].as<double>(), trans[5].as<double>()
+        );
+        q.normalize();
+        T_worldcamera_.rotation() = q.toRotationMatrix();
+      }
+    }
+
+    RCLCPP_INFO(this->get_logger(), "Robot to Camera transform initialized");
+
+    // TF Camera to Shoulder transform can be read from arm_model_
+    T_camerashoulder_ = arm_data_.oMf[arm_model_.getFrameId("RightShoulder")];
+    if (!T_camerashoulder_.rotation().allFinite() || !T_camerashoulder_.translation().allFinite())
+    {
+      RCLCPP_ERROR(this->get_logger(), "Invalid Camera to Shoulder transform (NaNs detected)");
+      return;
+    }
+    T_worldshoulder_ = T_worldcamera_ * T_camerashoulder_;
+
     
   }
 
@@ -288,13 +275,11 @@ private:
     if (dq_task.allFinite()) kf_.update_dq(dq_task, sigma_task);
 
     // (B) Vision dq (slow). Weight by confidence and recency.
-    if (last_vis_stamp_.nanoseconds() > 0){
-      double age = (this->now() - last_vis_stamp_).seconds();
-
-      if (age < freshness_max_sec_ && dq_vis_.size()==arm_model_.nv){
-        if (dq_vis_.allFinite()) kf_.update_dq(dq_vis_, sigma_vis_);
-      }
+    if (got_new_vision_){
+      kf_.update_dq(dq_vis_, sigma_vis_);
+      got_new_vision_ = false;
     }
+    
     // RCLCPP_INFO(this->get_logger(), "KF state: %d, dq size: %d, dtc: %.3f", kf_.initialized, kf_.dq().size(), kf_.dtc);
 
     dq_arm_ = kf_.dq();
@@ -334,7 +319,7 @@ private:
 
     q_arm_ = Eigen::VectorXd::Map(msg->position.data(), arm_model_.nq);
     dq_vis_ = Eigen::VectorXd::Map(msg->velocity.data(), arm_model_.nv);
-    last_vis_stamp_ = this->now();
+    got_new_vision_ = true;
 
     pinocchio::forwardKinematics(arm_model_, arm_data_, q_arm_);
     pinocchio::updateFramePlacements(arm_model_, arm_data_);
@@ -371,6 +356,7 @@ private:
   bool use_confidence_ = false; // whether to use confidence in vision measurement
   double sigma_vis_ = 0.25; // constant vision noise (rad/s)
   double sigma_vis_base_ = 0.50; // base sigma if using confidence
+  bool got_new_vision_ = false;
 
   bool print_velocity_ = true; // whether to print joint velocities to console
   bool print_sigmas_ = true; // whether to print measurement and task sigmas to console

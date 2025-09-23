@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image, CameraInfo
+from sensor_msgs.msg import Image, CameraInfo, JointState
 from std_msgs.msg import Int16MultiArray
 from cv_bridge import CvBridge
 import mediapipe as mp
@@ -61,7 +61,26 @@ class MediaPipePoseNode(Node):
         self._poses_msg = Int16MultiArray()
         self._poses_msg.data = [0] * (len(self.right_arm_index) * 3)  # 3 values per landmark: x, y, confidence
 
+        self.js_sub = self.create_subscription(JointState, '/optimized_arm/joint_states', self.on_joint_state, 10)
+        self.elbow_danger = False
+        self.shoulder_danger = False
+        self.wrist_danger = False
+
+
         self.get_logger().info(f"MediaPipe Pose running on {rgb_topic} (model_complexity={model_complexity})")
+
+    def on_joint_state(self, msg: JointState):
+        elbow_angle = msg.position[msg.name.index('jRightElbow_rotz')] * 180 / 3.14159
+        self.elbow_danger = elbow_angle < 40  # Example threshold
+        # self.get_logger().info(f"Elbow angle: {elbow_angle}, Danger: {self.elbow_danger}")
+
+        shoulder_angle = msg.position[msg.name.index('jRightShoulder_rotx')] * 180 / 3.14159
+        self.shoulder_danger = shoulder_angle > 40  # Example threshold
+        # self.get_logger().info(f"Shoulder angle: {shoulder_angle}, Danger: {self.shoulder_danger}")
+
+        wrist_angle = msg.position[msg.name.index('jRightWrist_rotz')] * 180 / 3.14159
+        self.wrist_danger = wrist_angle > 15  # Example threshold
+        # self.get_logger().info(f"Wrist angle: {wrist_angle}, Danger: {self.wrist_danger}")
 
     def on_image(self, msg: Image):
         # Convert to OpenCV BGR image. Avoid copying where possible.
@@ -98,16 +117,41 @@ class MediaPipePoseNode(Node):
 
         if self.publish_annotated:
             # Draw landmarks on the image
-            if res.pose_landmarks:
-                annotated_img = img_rgb.copy()
-                self.mp_drawing.draw_landmarks(annotated_img, res.pose_landmarks, self.mp_pose.POSE_CONNECTIONS)
+            self.publish_annotated_image(res, img_rgb)
 
-                # Convert back to ROS Image message
-                annotated_msg = self.bridge.cv2_to_imgmsg(annotated_img, encoding='bgr8')
-                annotated_msg.header = msg.header
-                annotated_msg.header.frame_id = self.camera_frame
-                self.image_pub.publish(annotated_msg)
+    def publish_annotated_image(self, res, img_rgb):
+        if res.pose_landmarks:
+            annotated_img = img_rgb.copy()
+            self.mp_drawing.draw_landmarks(annotated_img, res.pose_landmarks, self.mp_pose.POSE_CONNECTIONS)
+            h,w = annotated_img.shape[:2]
+            # draw red point on elbow index 
+            if self.elbow_danger:
+                lm = res.pose_landmarks.landmark[self.right_arm_index[1]]
+                # Draw a red point on the elbow
+                cv2.circle(annotated_img, (int(lm.x * w), int(lm.y * h)), 10, (255, 0, 0), -1)
+                self.elbow_danger = False
+                self.get_logger().info(f"Elbow danger zone activated")
+            
+            if self.shoulder_danger:
+                lm = res.pose_landmarks.landmark[self.right_arm_index[2]]
+                # Draw a red point on the shoulder
+                cv2.circle(annotated_img, (int(lm.x * w), int(lm.y * h)), 10, (255, 0, 0), -1)
+                self.shoulder_danger = False
+                self.get_logger().info(f"Shoulder danger zone activated")
 
+            if self.wrist_danger:
+                lm = res.pose_landmarks.landmark[self.right_arm_index[3]]
+                # Draw a red point on the wrist
+                cv2.circle(annotated_img, (int(lm.x * w), int(lm.y * h)), 10, (255, 0, 0), -1)
+                self.wrist_danger = False
+                self.get_logger().info(f"Wrist danger zone activated")
+
+            # Convert back to ROS Image message
+            annotated_msg = self.bridge.cv2_to_imgmsg(annotated_img, encoding='rgb8')
+            annotated_msg.header.frame_id = self.camera_frame
+            self.image_pub.publish(annotated_msg)
+
+            
 
 def main():
     rclpy.init(args=None)

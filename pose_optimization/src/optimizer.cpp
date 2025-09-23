@@ -18,7 +18,7 @@ PoseOptimizer::PoseOptimizer()
 {   
     // Load the URDF model into Pinocchio
     RCLCPP_INFO(this->get_logger(), "Loading robot model...");
-    std::string urdf_path = ament_index_cpp::get_package_share_directory("image_pose_tracking") + "/config/right_arm.urdf";
+    std::string urdf_path = ament_index_cpp::get_package_share_directory("image_pose_tracking") + "/config/right_arm_opt.urdf";
 
     pinocchio::urdf::buildModel(urdf_path, model_);
     data_ = pinocchio::Data(model_);
@@ -26,6 +26,11 @@ PoseOptimizer::PoseOptimizer()
     joint_names_.reserve(model_.nq);
     for (int i = 1; i < model_.njoints; ++i)  // start from 1 to skip universe joint
         joint_names_.push_back(model_.names[i]);
+
+    RCLCPP_INFO(this->get_logger(), "Model has %d joints and %d DOF", model_.njoints - 1, model_.nq);
+    RCLCPP_INFO(this->get_logger(), "Joint names:");
+    for (const auto &name : joint_names_)
+        RCLCPP_INFO(this->get_logger(), "  %s", name.c_str());
 
     q = Eigen::VectorXd::Zero(model_.nq);
     q_init_ = q; // Initialize with zero joint angles
@@ -58,13 +63,14 @@ PoseOptimizer::PoseOptimizer()
             config["ee2hand"]["translation"][2].as<double>()
         );
     }
-    Eigen::Vector3d rotation = Eigen::Vector3d::Zero();
+    Eigen::Vector4d rotation = Eigen::Vector4d::Zero();
     if (config["ee2hand"]["rotation"])
     {
-        rotation = Eigen::Vector3d(
+        rotation = Eigen::Vector4d(
             config["ee2hand"]["rotation"][0].as<double>(),
             config["ee2hand"]["rotation"][1].as<double>(),
-            config["ee2hand"]["rotation"][2].as<double>()
+            config["ee2hand"]["rotation"][2].as<double>(),
+            config["ee2hand"]["rotation"][3].as<double>()
         );
     }
 
@@ -129,9 +135,8 @@ PoseOptimizer::PoseOptimizer()
         
     // getting method from the yaml
     ee_to_hand_ = Eigen::Isometry3d::Identity();
-    Eigen::Matrix3d R = Eigen::AngleAxisd(rotation[0], Eigen::Vector3d::UnitX()).toRotationMatrix()
-                        * Eigen::AngleAxisd(rotation[1], Eigen::Vector3d::UnitY()).toRotationMatrix()
-                        * Eigen::AngleAxisd(rotation[2], Eigen::Vector3d::UnitZ()).toRotationMatrix();
+    Eigen::Quaterniond q (rotation[3], rotation[0], rotation[1], rotation[2]);
+    Eigen::Matrix3d R = q.toRotationMatrix();
     ee_to_hand_.linear() = R;
     ee_to_hand_.translation() = translation;
     hand_to_ee_ = ee_to_hand_.inverse();
@@ -147,8 +152,8 @@ PoseOptimizer::PoseOptimizer()
         "/optimized_arm/joint_states", 10);
     
     // kinematics constants
-    hand_idx = model_.getFrameId("RightHandCOM");
-    sh_idx = model_.getFrameId("RightShoulder");
+    hand_idx = model_.getFrameId("opt_RightHandCOM");
+    sh_idx = model_.getFrameId("opt_RightShoulder");
 
     // Subscribe to joint states
     RCLCPP_INFO(this->get_logger(), "Subscribing to joint states on /arm/joint_states");
@@ -262,6 +267,8 @@ void PoseOptimizer::joint_state_callback(const sensor_msgs::msg::JointState::Sha
         RCLCPP_ERROR(this->get_logger(), "Invalid shoulder_to_hand_ref transform (NaNs detected)");
         return;
     }
+    
+    
 
     // turn it into Pinocchio SE3
     T_shoulder_hand_ref.translation() = shoulder_to_hand_ref.translation();
@@ -285,7 +292,7 @@ void PoseOptimizer::joint_state_callback(const sensor_msgs::msg::JointState::Sha
     
     // publish ground truth transform from shoulder to hand
     geometry_msgs::msg::TransformStamped gt_transform;
-    gt_transform.header.stamp = this->get_clock()->now();
+    gt_transform.header.stamp = tf_shoulder2ee.header.stamp;
     gt_transform.header.frame_id = "camera_depth_optical_frame";
     gt_transform.child_frame_id = "RightHand (Ground Truth)";
     gt_transform.transform.translation.x = shoulder_to_hand_ref.translation().x();

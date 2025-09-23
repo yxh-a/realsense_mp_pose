@@ -148,13 +148,13 @@ class Arm_Solver_Node(Node):
         joint_states = JointState()
         joint_states.header.stamp = self.get_clock().now().to_msg()
         joint_states.name = [
-            'jRightShoulder_rotx',
-            'jRightShoulder_rotz',
-            'jRightShoulder_roty',
-            'jRightElbow_rotz',
-            'jRightElbow_roty',
-            'jRightWrist_rotx',
-            'jRightWrist_rotz'
+            'opt_jRightShoulder_rotx',
+            'opt_jRightShoulder_rotz',
+            'opt_jRightShoulder_roty',
+            'opt_jRightElbow_rotz',
+            'opt_jRightElbow_roty',
+            'opt_jRightWrist_rotx',
+            'opt_jRightWrist_rotz'
         ]
         joint_states.position = [
             np.radians(theta_shoulder_x),  # Shoulder x rotation
@@ -193,7 +193,7 @@ class Arm_Solver_Node(Node):
         else:
             # self.get_logger().info(f"Rotation matrix from shoulder frame y-axis to upper arm vector:\n{Rxz_shoulder}")
             rxz = R.from_matrix(Rxz_shoulder)
-            theta_shoulder_x, theta_y_temp, theta_shoulder_z = rxz.as_euler('xzy', degrees=True)
+            theta_shoulder_x, theta_shoulder_z, y_temp = rxz.as_euler('xzy', degrees=True)
             # self.get_logger().info(f"Shoulder angles: x: {theta_shoulder_x:.2f} degrees, z: {theta_shoulder_z:.2f} degrees")
 
         #  calculate shoulder y rotation based on direction of the elbow
@@ -272,7 +272,7 @@ class Arm_Solver_Node(Node):
         # self.get_logger().info(f"palm reach length: {np.linalg.norm(w):.2f} m")
         # solve last three degreee of freedom with w and v
         # theta_wrist_x, theta_wrist_y, theta_wrist_z = self.get_3DOF_joint_angles(v, w)
-        theta_wrist_x, theta_wrist_y, theta_wrist_z = 0.0, 0.0, 0.0
+        theta_wrist_x, theta_wrist_y, theta_wrist_z = 0.0, -30.0, 0.0
         # Publish the joint states
         self.publish_joint_states(theta_shoulder_x, theta_shoulder_y, theta_shoulder_z, theta_elbow_deg, theta_wrist_x, theta_wrist_y, theta_wrist_z)
 

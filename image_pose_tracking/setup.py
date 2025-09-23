@@ -1,5 +1,6 @@
 from setuptools import find_packages, setup
 import os
+import glob
 
 package_name = 'image_pose_tracking'
 
@@ -14,7 +15,8 @@ setup(
         (os.path.join('share', package_name, 'config'), 
             ['config/right_arm.urdf', 
              'config/right_arm.rviz',
-            ]),
+             'config/right_arm_gt.urdf',
+             'config/right_arm_opt.urdf']),
     ],
     install_requires=[
         'setuptools',

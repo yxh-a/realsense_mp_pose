@@ -31,7 +31,7 @@ int main(int argc, char **argv)
     auto node = rclcpp::Node::make_shared("ik_solver_node");
 
     // === Load URDF and SRDF from file ===
-    std::string urdf_path = ament_index_cpp::get_package_share_directory("image_pose_tracking") + "/config/right_arm_baseline.urdf";
+    std::string urdf_path = ament_index_cpp::get_package_share_directory("image_pose_tracking") + "/config/right_arm.urdf";
     std::string srdf_path = ament_index_cpp::get_package_share_directory("arm_moveit_config") + "/config/upper_arm.srdf";
     std::string urdf_string = loadFile(urdf_path);
     std::string srdf_string = loadFile(srdf_path);
@@ -122,6 +122,11 @@ int main(int argc, char **argv)
         {
             initial_joint_states.push_back(value.as<double>());
         }
+        RCLCPP_INFO(node->get_logger(), "Initial joint states set to: %f, %f, %f, %f, %f, %f, %f",
+                    initial_joint_states[0], initial_joint_states[1], initial_joint_states[2],
+                    initial_joint_states[3], initial_joint_states[4], initial_joint_states[5],
+                    initial_joint_states[6]);
+        RCLCPP_INFO(node->get_logger(), "Joint number in the group: %zu", joint_model_group->getVariableCount());
     }
     else
     {
@@ -132,6 +137,10 @@ int main(int argc, char **argv)
     if (initial_joint_states.size() == joint_model_group->getVariableCount())
     {
         joint_values = initial_joint_states;
+        RCLCPP_INFO(node->get_logger(), "Joint values set to: %f, %f, %f, %f, %f, %f, %f",
+                    joint_values[0], joint_values[1], joint_values[2],
+                    joint_values[3], joint_values[4], joint_values[5],
+                    joint_values[6]);
     }
     else
     {
@@ -139,7 +148,7 @@ int main(int argc, char **argv)
         return 0;
     }
     // Set the initial joint values
-    robot_state.setVariablePositions(joint_values);
+    // robot_state.setVariablePositions(joint_values);
 
     //   === Initialize TF listener ===
     tf2_ros::Buffer tf_buffer(node->get_clock());
@@ -206,7 +215,7 @@ int main(int argc, char **argv)
 
         // Publish the joint states
         sensor_msgs::msg::JointState joint_state_msg;
-        joint_state_msg.header.stamp = node->now();
+        joint_state_msg.header.stamp = transform_stamped.header.stamp;
         joint_state_msg.name = joint_model_group->getVariableNames();
         joint_state_msg.position = joint_values;
 

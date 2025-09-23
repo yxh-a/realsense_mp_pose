@@ -38,4 +38,4 @@ parameters:
    
 
   visualizer:
-    static_transformation: [0.400, -0.125, 0.09, -0.70710678, 0, 0, 0.70710678]
+    static_transformation: [0.325, -0.125, 0.09, -0.70710678, 0, 0, 0.70710678]

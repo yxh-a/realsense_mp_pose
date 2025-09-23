@@ -1,6 +1,6 @@
 Panels:
   - Class: rviz_common/Displays
-    Help Height: 138
+    Help Height: 0
     Name: Displays
     Property Tree Widget:
       Expanded:
@@ -10,11 +10,13 @@ Panels:
         - /TF1
         - /TF1/Frames1
         - /TF1/Tree1
+        - /PointCloud21
         - /RobotModel3
         - /RobotModel3/Description Topic1
-        - /Trajectory1
+        - /RobotModel4
+        - /RobotModel4/Description Topic1
       Splitter Ratio: 0.5220779180526733
-    Tree Height: 615
+    Tree Height: 367
   - Class: rviz_common/Selection
     Name: Selection
   - Class: rviz_common/Tool Properties
@@ -64,21 +66,72 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /arm/robot_description
-      Enabled: false
+        Value: /optimized_arm/robot_description
+      Enabled: true
       Links:
         All Links Enabled: true
         Expand Joint Details: false
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
+        camera_depth_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        opt_RightForeArm:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        opt_RightForeArm_f1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        opt_RightHand:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        opt_RightHandCOM:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        opt_RightHand_f1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        opt_RightShoulder:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        opt_RightUpperArm:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        opt_RightUpperArm_f1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        opt_RightUpperArm_f2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        opt_Trunk:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
       Mass Properties:
         Inertia: false
         Mass: false
       Name: RobotModel
       TF Prefix: ""
       Update Interval: 0
-      Value: false
+      Value: true
       Visual Enabled: true
     - Class: rviz_default_plugins/TF
       Enabled: true
@@ -87,27 +140,43 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: false
-        RightForeArm:
-          Value: false
-        RightForeArm_f1:
+        RightForearm_gt:
           Value: false
         RightHand:
           Value: false
         RightHand (Ground Truth):
           Value: true
         RightHandCOM:
-          Value: true
-        RightHand_f1:
+          Value: false
+        RightHand_gt:
           Value: false
         RightShoulder:
           Value: false
-        RightUpperArm:
+        RightUpperArm_gt:
           Value: false
-        RightUpperArm_f1:
-          Value: false
-        RightUpperArm_f2:
+        Trunk:
           Value: false
         camera_depth_optical_frame:
+          Value: false
+        gt_RightForeArm:
+          Value: false
+        gt_RightForeArm_f1:
+          Value: false
+        gt_RightHand:
+          Value: false
+        gt_RightHandCOM:
+          Value: false
+        gt_RightHand_f1:
+          Value: false
+        gt_RightShoulder:
+          Value: false
+        gt_RightUpperArm:
+          Value: false
+        gt_RightUpperArm_f1:
+          Value: false
+        gt_RightUpperArm_f2:
+          Value: false
+        gt_Trunk:
           Value: false
         lbr_floating_link:
           Value: false
@@ -129,6 +198,26 @@ Visualization Manager:
           Value: false
         lbr_link_ee:
           Value: false
+        opt_RightForeArm:
+          Value: false
+        opt_RightForeArm_f1:
+          Value: false
+        opt_RightHand:
+          Value: false
+        opt_RightHandCOM:
+          Value: true
+        opt_RightHand_f1:
+          Value: false
+        opt_RightShoulder:
+          Value: false
+        opt_RightUpperArm:
+          Value: false
+        opt_RightUpperArm_f1:
+          Value: false
+        opt_RightUpperArm_f2:
+          Value: false
+        opt_Trunk:
+          Value: false
         world:
           Value: false
       Marker Scale: 1
@@ -142,15 +231,38 @@ Visualization Manager:
             RightHand (Ground Truth):
               {}
             RightShoulder:
-              RightUpperArm_f1:
-                RightUpperArm_f2:
-                  RightUpperArm:
-                    RightForeArm:
-                      RightForeArm_f1:
-                        RightHand_f1:
-                          RightHand:
-                            RightHandCOM:
+              Trunk:
+                {}
+            gt_RightShoulder:
+              RightForearm_gt:
+                {}
+              RightHand_gt:
+                {}
+              RightUpperArm_gt:
+                {}
+              gt_RightUpperArm_f1:
+                gt_RightUpperArm_f2:
+                  gt_RightUpperArm:
+                    gt_RightForeArm:
+                      gt_RightForeArm_f1:
+                        gt_RightHand_f1:
+                          gt_RightHand:
+                            gt_RightHandCOM:
                               {}
+              gt_Trunk:
+                {}
+            opt_RightShoulder:
+              opt_RightUpperArm_f1:
+                opt_RightUpperArm_f2:
+                  opt_RightUpperArm:
+                    opt_RightForeArm:
+                      opt_RightForeArm_f1:
+                        opt_RightHand_f1:
+                          opt_RightHand:
+                            opt_RightHandCOM:
+                              {}
+              opt_Trunk:
+                {}
           lbr_floating_link:
             lbr_link_0:
               lbr_link_1:
@@ -164,7 +276,7 @@ Visualization Manager:
                               {}
       Update Interval: 0
       Value: true
-    - Alpha: 1
+    - Alpha: 0.5
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
         Max Value: 10
@@ -298,90 +410,164 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /optimized_arm/robot_description
-      Enabled: false
+        Value: /gt/robot_description
+      Enabled: true
       Links:
         All Links Enabled: true
         Expand Joint Details: false
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
+        camera_depth_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        gt_RightForeArm:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gt_RightForeArm_f1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gt_RightHand:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gt_RightHandCOM:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gt_RightHand_f1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        gt_RightShoulder:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gt_RightUpperArm:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gt_RightUpperArm_f1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        gt_RightUpperArm_f2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        gt_Trunk:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
       Mass Properties:
         Inertia: false
         Mass: false
       Name: RobotModel
       TF Prefix: ""
       Update Interval: 0
-      Value: false
+      Value: true
       Visual Enabled: true
-    - Class: moveit_rviz_plugin/Trajectory
-      Color Enabled: true
+    - Class: rviz_default_plugins/Image
       Enabled: true
-      Interrupt Display: true
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Image
+      Normalize Range: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /pose_annotated
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/RobotModel
+      Collision Enabled: false
+      Description File: ""
+      Description Source: Topic
+      Description Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /gt/robot_description
+      Enabled: true
       Links:
         All Links Enabled: true
         Expand Joint Details: false
         Expand Link Details: false
         Expand Tree: false
-        Link Tree Style: ""
-        RightForeArm:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        RightForeArm_f1:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        RightHand:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        RightHandCOM:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        RightHand_f1:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        RightShoulder:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        RightUpperArm:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        RightUpperArm_f1:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        RightUpperArm_f2:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
+        Link Tree Style: Links in Alphabetic Order
         camera_depth_optical_frame:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-      Loop Animation: true
-      Name: Trajectory
-      Robot Alpha: 1
-      Robot Color: 229; 165; 10
-      Robot Description: robot_description
-      Show Robot Collision: false
-      Show Robot Visual: true
-      Show Trail: false
-      State Display Time: 0.1s
-      Trail Step Size: 1
-      Trajectory Topic: /display_planned_path
-      Use Sim Time: true
+        gt_RightForeArm:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gt_RightForeArm_f1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gt_RightHand:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gt_RightHandCOM:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gt_RightHand_f1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        gt_RightShoulder:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gt_RightUpperArm:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gt_RightUpperArm_f1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        gt_RightUpperArm_f2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        gt_Trunk:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+      Mass Properties:
+        Inertia: false
+        Mass: false
+      Name: RobotModel
+      TF Prefix: ""
+      Update Interval: 0
       Value: true
+      Visual Enabled: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -428,25 +614,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 1.2614785432815552
+      Distance: 1.688585877418518
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.4327146112918854
-        Y: 0.5578383207321167
-        Z: 0.2971275746822357
+        X: 0.814692497253418
+        Y: -0.005430996417999268
+        Z: 0.18526309728622437
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.4953986406326294
+      Pitch: 1.0222855806350708
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 1.347212791442871
+      Yaw: 0.06558243930339813
     Saved: ~
 Window Geometry:
   Displays:
@@ -454,17 +640,17 @@ Window Geometry:
   Height: 1011
   Hide Left Dock: false
   Hide Right Dock: false
-  QMainWindow State: 000000ff00000000fd00000004000000000000018300000331fc020000000afb0000001200530065006c0065006300740069006f006e000000003f000001960000005d00fffffffb0000001e0054006f006f006c002000500072006f00700065007200740069006500730200000d50000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000003f00000331000000cc00fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb000000280020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000000000000000fb0000003c005400720061006a006500630074006f007200790020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000004400ffffff000000010000015d00000331fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073000000003f00000331000000a900fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000007420000005efc0100000002fb0000000800540069006d00650100000000000007420000026f00fffffffb0000000800540069006d00650100000000000004500000000000000000000005b90000033100000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Image:
+    collapsed: false
+  QMainWindow State: 000000ff00000000fd00000004000000000000021e00000331fc020000000bfb0000001200530065006c0065006300740069006f006e000000003f000001960000005d00fffffffb0000001e0054006f006f006c002000500072006f00700065007200740069006500730200000bcb000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000003f000001af000000cc00fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb000000280020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000000000000000fb0000003c005400720061006a006500630074006f007200790020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000000000000000fb0000000a0049006d00610067006501000001f40000017c0000001700ffffff000000010000015d00000331fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073000000003f00000331000000a900fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e100000197000000030000073e0000005efc0100000002fb0000000800540069006d006501000000000000073e0000026f00fffffffb0000000800540069006d006501000000000000045000000000000000000000051a0000033100000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Time:
     collapsed: false
   Tool Properties:
     collapsed: false
-  Trajectory - Trajectory Slider:
-    collapsed: false
   Views:
     collapsed: false
-  Width: 1858
-  X: 62
+  Width: 1854
+  X: 66
   Y: 152

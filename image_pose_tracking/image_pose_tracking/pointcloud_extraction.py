@@ -114,7 +114,7 @@ class PointCloudExtractionNode(Node):
         
         cloud_point = cloud_array[0]  # Take the first valid point
         true_point = Point()
-        true_point.x = cloud_point[0]
+        true_point.x = cloud_point[0]+0.05 
         true_point.y = cloud_point[1]
         true_point.z = cloud_point[2] + self.joint_center_depth_offset  # Adjust depth with offset
         return true_point
