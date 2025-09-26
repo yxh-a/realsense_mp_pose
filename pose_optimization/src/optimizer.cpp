@@ -157,12 +157,16 @@ PoseOptimizer::PoseOptimizer()
 
     // Subscribe to joint states
     RCLCPP_INFO(this->get_logger(), "Subscribing to joint states on /arm/joint_states");
-    joint_state_sub_ = this->create_subscription<sensor_msgs::msg::JointState>(
+    joint_state_sub_ = this->create_subscription<std_msgs::msg::Float32MultiArray>(
         "/arm/joint_states", 10, std::bind(&PoseOptimizer::joint_state_callback, this, std::placeholders::_1));
 
     // initialize timer
     last_update_time_ = this->get_clock()->now();
     RCLCPP_INFO(this->get_logger(), "PoseOptimizer initialized successfully");
+
+    //intialize a window for velocity smoothing
+    int window_size_ = 5;
+    dq_window_.resize(window_size_, std::vector<double>(7, 0.0));
 
 }
 
@@ -187,9 +191,9 @@ double PoseOptimizer::costFunction(unsigned n, const double* x, double* grad, vo
     double pose_cost = error_twist.linear().squaredNorm() * self->pos_weight +
                        error_twist.angular().squaredNorm() * self->rot_weight;
 
-    // calculate joint cost to hold first 4 joints
+    // calculate joint cost to hold first 7 joints
     double joint_cost = 0.0;
-    for (size_t i = 0; i < 4; ++i) {
+    for (size_t i = 0; i < 7; ++i) {
         joint_cost += self->joint_weights[i] * std::pow(q[i] - self->q_init_[i], 2);
 
     }
@@ -214,22 +218,20 @@ double PoseOptimizer::costFunction(unsigned n, const double* x, double* grad, vo
 }
 
 
-void PoseOptimizer::joint_state_callback(const sensor_msgs::msg::JointState::SharedPtr msg)
+void PoseOptimizer::joint_state_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg)
 {   
     // update the robot state based on the received joint states
 
-    if (msg->name.size() != model_.nq)
+    if (msg->data.size() != model_.nq)
     {
-        RCLCPP_ERROR(this->get_logger(), "Received joint states size (%zu) does not match model DOF (%d)", msg->name.size(), model_.nq);
+        RCLCPP_ERROR(this->get_logger(), "Received joint states size (%zu) does not match model DOF (%d)", msg->data.size(), model_.nq);
         return;
     }
     
     q = Eigen::VectorXd::Zero(model_.nq);
     for (size_t i = 0; i < joint_names_.size(); ++i)
     {
-        auto it = std::find(msg->name.begin(), msg->name.end(), joint_names_[i]);
-        if (it != msg->name.end())
-            q[i] = msg->position[it - msg->name.begin()];
+        q[i] = msg->data[i];
     }
 
     q_init_ = q; // Store initial joint angles
@@ -431,6 +433,23 @@ void PoseOptimizer::joint_state_callback(const sensor_msgs::msg::JointState::Sha
     if (have_prev_) {
         double dt = (this->now() - last_update_time_).seconds();
         for (size_t i = 0; i < model_.nq; ++i) {
+            // if (dt > 0){
+            //     double raw_dq = (q[i] - q_prev_[i]) / dt;
+            //     // add the new velocity to the window
+            //     dq_window_.erase(dq_window_.begin());
+            //     dq_window_.push_back(std::vector<double>(7, 0.0));
+            //     dq_window_.back()[i] = raw_dq;
+            //     // calculate the smoothed velocity
+            //     double smoothed_dq = 0.0;
+            //     for (const auto& vel_vec : dq_window_) {
+            //         smoothed_dq += vel_vec[i];
+            //     }
+            //     smoothed_dq /= dq_window_.size();
+            //     optimized_joint_state.velocity[i] = smoothed_dq;
+            // }
+            // else {
+            //     optimized_joint_state.velocity[i] = 0.0;
+            // }
             optimized_joint_state.velocity[i] = (q[i] - q_prev_[i]) / dt;
         }
     }

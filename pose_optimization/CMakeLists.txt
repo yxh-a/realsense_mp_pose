@@ -14,6 +14,7 @@ find_package(pinocchio REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(NLOPT REQUIRED nlopt)
@@ -32,6 +33,7 @@ ament_target_dependencies(optimizer
   tf2_geometry_msgs
   pinocchio
   sensor_msgs
+  std_msgs
   ament_index_cpp
 )
 

@@ -95,21 +95,21 @@ int main(int argc, char **argv)
             config["ee2hand"]["translation"][2].as<double>()
         );
     }
-    Eigen::Vector3d rotation = Eigen::Vector3d::Zero();
+    Eigen::Vector4d rotation = Eigen::Vector4d::Zero();
     if (config["ee2hand"]["rotation"])
     {
-        rotation = Eigen::Vector3d(
+        rotation = Eigen::Vector4d(
             config["ee2hand"]["rotation"][0].as<double>(),
             config["ee2hand"]["rotation"][1].as<double>(),
-            config["ee2hand"]["rotation"][2].as<double>()
+            config["ee2hand"]["rotation"][2].as<double>(),
+            config["ee2hand"]["rotation"][3].as<double>()
         );
     }
 
     Eigen::Isometry3d T_ee_hand = Eigen::Isometry3d::Identity();
     T_ee_hand.translation() = translation;
-    Eigen::Matrix3d R = Eigen::AngleAxisd(rotation[0], Eigen::Vector3d::UnitX()).toRotationMatrix()
-                            * Eigen::AngleAxisd(rotation[1], Eigen::Vector3d::UnitY()).toRotationMatrix()
-                            * Eigen::AngleAxisd(rotation[2], Eigen::Vector3d::UnitZ()).toRotationMatrix();
+    Eigen::Quaterniond q (rotation[3], rotation[0], rotation[1], rotation[2]);
+    Eigen::Matrix3d R = q.toRotationMatrix();
     T_ee_hand.linear() = R;
     Eigen::Isometry3d T_hand_ee = T_ee_hand.inverse();
     RCLCPP_INFO(node->get_logger(), "Hand to EE transform loaded successfully");

@@ -1,28 +1,28 @@
 ee2hand:
   # translation: [-0.02, 0.0, 0.07]  # x, y, z in meters
-  translation: [-0.05431525, 0.00699193, 0.09948438]
+  translation: [-0.06706253, -0.00179535, 0.10661123]
   # rotation: [0.6965434814850009, -0.12339100960418944, -0.6959888703149829, 0.12329367196773267]
-  rotation: [-0.6250948010838325, 0.4382101926199702, 0.6431849227950125, 0.05951026660254954]
+  rotation: [-0.548193210021664, 0.41193305091399596, 0.7270256562319896, -0.0350579695829072]
 
 operational:
     method: "NLopt"  # Method to use for optimization, e.g., "SVD", "Levenberg-Marquardt"
 
     print_error_before_loop: false  # Print error before optimization loop
     print_error_in_loop: false  # Print error after optimization loop
-    print_error_after_loop: true  # Print error after optimization loop
+    print_error_after_loop: false  # Print error after optimization loop
     print_joint_angles: false  # Print joint angles during optimization
 
     baseline_hz: 20  # Baseline frequency for optimization
 NLopt:
   algorithm: "LN_COBYLA"  # Optimization algorithm to use, e.g., "LD_LBFGS", "LN_COBYLA"
-  max_iterations: 500  # Maximum iterations for NLopt
-  tolerance: 1e-2  # Tolerance for convergence
-  pos_weight: 5.0  # Weight for position error in cost function
-  rot_weight: 1.0  # Weight for rotation error in cost function
-  joint_weights: [1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0]  # Weights for joint angles
-  joint_penalty_weight: 10.0  # Penalty weight for joint angles
-  acceleration_weight: 1.0  # Weight for acceleration in cost function
-  velocity_weight: 1.0  # Weight for velocity in cost function
+  max_iterations: 300  # Maximum iterations for NLopt
+  tolerance: 1e-3  # Tolerance for convergence
+  pos_weight: 8.0  # Weight for position error in cost function
+  rot_weight: 2.0  # Weight for rotation error in cost function
+  joint_weights: [2.0, 1.0, 1.0, 1.0, 0.0, 0.0, 2.0]  # Weights for joint angles
+  joint_penalty_weight: 0.7  # Penalty weight for joint angles
+  acceleration_weight: 0.1  # Weight for acceleration in cost function
+  velocity_weight: 0.1  # Weight for velocity in cost function
 
 SVD:
   max_iterations: 100  # Maximum iterations for SVD
@@ -30,6 +30,6 @@ SVD:
   damping_factor: 0.1  # Damping factor for optimization
   print_jacobian: false  # Print Jacobian matrix during optimization
 
-initial_joint_states: [-1.8662461835704307, 0.8590559575694462, -0.6697032662556018, 0.21030423026992587, 0.0, 0.0, 0.0]
-# initial_joint_states: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Initial joint states for the arm
+# initial_joint_states: [-1.8662461835704307, 0.8590559575694462, -0.6697032662556018, 0.21030423026992587, 0.0, 0.0, 0.0]
+initial_joint_states: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Initial joint states for the arm
   

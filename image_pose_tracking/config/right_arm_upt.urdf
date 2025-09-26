@@ -1,129 +1,34 @@
 <robot name="upper_arm">
 
     <material name="color">
-        <color rgba="0 1 0 1"/>
+        <color rgba="1 0 0 1"/>
     </material>
 
     <link name="camera_depth_optical_frame"/>
 
-    <joint name="gt_world_to_shoulder" type="fixed">
+    <joint name="upt_world_to_shoulder" type="fixed">
         <parent link="camera_depth_optical_frame"/>
-        <child link="gt_RightShoulder"/>
+        <child link="upt_RightShoulder"/>
         <origin xyz="-0.12466341 -0.152376    1.07400005" rpy="3.14 1.57 0"/>
     </joint>
         <!-- === Trunk slab (torso) === -->
-
-    <link name="T8">
+    <link name="upt_Trunk">
         <inertial>
+            <!-- Give it a small but nonzero mass to avoid NaNs -->
             <mass value="5.0"/>
             <origin xyz="0 0 0.20" rpy="0 0 0"/>
+            <!-- Rough, diagonal-dominant inertia for a 0.40 x 0.25 x 0.55 m box -->
             <inertia ixx="0.5" iyy="0.8" izz="0.5" ixy="0" ixz="0" iyz="0"/>
         </inertial>
 
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
-            <geometry>
-                <cylinder length="0.4" radius="0.05"/>
-            </geometry>
-            <material name="color">
-                <color rgba="0.6 0.6 0.6 1.0"/>
-            </material>
-        </visual>
-
-        <collision>
-            <origin xyz="0 0 0" rpy="0 0 0"/>
-            <geometry>
-                <cylinder length="0.4" radius="0.05"/>
-            </geometry>
-        </collision>
-    </link>
-
-
-    <link name="Neck">
-        <inertial>
-            <mass value="0.8724"/>
-			<!--COM origin wrt jT1C7-->
-            <origin xyz="0  0 0" rpy="1.57 0 0" />
-            <inertia ixx="0.00091024" iyy="0.00091024" izz="0.00043345" ixy="0" ixz="0" iyz="0"/>
-        </inertial>
-
-        <visual>
-			<!--box origin wrt jT1C7-->
-            <origin xyz="0    0.0 0" rpy="1.57 0 0" />
-            <geometry>
-		<cylinder length="0.1" radius="0.05"/>
-            </geometry>
-            <material name="color"/>
-        </visual>
-
-        <collision>
-			<!--box origin wrt jT1C7-->
-            <origin xyz="0    0.0 0" rpy="1.57 0 0" />
-            <geometry>
-                <cylinder length="0.1" radius="0.05"/>
-            </geometry>
-        </collision>
-    </link>
-
-    <link name="Head">
-        <inertial>
-            <mass value="2.6172"/>
-			<!--COM origin wrt jC1Head-->
-            <origin xyz="0           0    0" rpy="0 0 0" />
-            <inertia ixx="0.010376" iyy="0.010376" izz="0.010376" ixy="0" ixz="0" iyz="0"/>
-        </inertial>
-
-        <visual>
-			<!--boc origin wrt jC1Head-->
-            <origin xyz="0           0    0" rpy="0 0 0" />
-            <geometry>
-                <sphere radius="0.1"/>
-            </geometry>
-            <material name="color"/>
-        </visual>
-
-        <collision>
-			<!--box origin wrt jC1Head-->
-            <origin xyz="0           0    0" rpy="0 0 0" />
-            <geometry>
-                <sphere radius="0.1"/>
-            </geometry>
-        </collision>
-
-    </link>
-
-    <joint name="jTrunk" type="fixed">
-        <origin xyz="0 0 -0.2" rpy="0 0 0"/>
-        <parent link="gt_RightShoulder"/>
-        <child link="T8"/>
-    </joint>
-
-    <joint name="jNeck" type="fixed">
-        <origin xyz="0  0.05 0" rpy="0 0 0"/>
-        <parent link="T8"/>
-        <child link="Neck"/>
-    </joint>
-
-    <joint name="jHead" type="fixed">
-        <origin xyz="0 0.1 0" rpy="0 0 0"/>
-        <parent link="Neck"/>
-        <child link="Head"/>
-    </joint>
-
-
-    <!-- <link name="gt_Trunk">
-        <inertial>
-            <mass value="5.0"/>
-            <origin xyz="0 0 0.20" rpy="0 0 0"/>
-            <inertia ixx="0.5" iyy="0.8" izz="0.5" ixy="0" ixz="0" iyz="0"/>
-        </inertial>
-
-        <visual>
-            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <!-- size = [width_x, depth_y, height_z] -->
             <geometry>
                 <cylinder length="0.4" radius="0.02"/>
             </geometry>
             <material name="color">
+                <!-- subtle gray so the arm (green) stands out -->
                 <color rgba="0.6 0.6 0.6 1.0"/>
             </material>
         </visual>
@@ -134,38 +39,38 @@
                 <cylinder length="0.4" radius="0.02"/>
             </geometry>
         </collision>
-    </link> -->
+    </link>
 
-    <!-- <joint name="gt_jShoulder_to_trunk" type="fixed">
+    <joint name="upt_jShoulder_to_trunk" type="fixed">
         <origin xyz="0 0 -0.20" rpy="0 0 0"/>
-        <parent link="gt_RightShoulder"/>
-        <child link="gt_Trunk"/>
-    </joint> -->
+        <parent link="upt_RightShoulder"/>
+        <child link="upt_Trunk"/>
+    </joint>
 
     <!--  shoudler, 3DOF -->
-    <link name="gt_RightShoulder">
+    <link name="upt_RightShoulder">
 
 
         <visual>
 			<!--box origin wrt jRightC7Shoulder. RPY rotated of pi/2.-->
             <origin xyz="0 0 0" rpy="0 0 0" />
             <geometry>
-                <sphere radius="0.05"/>
+                <sphere radius="0.02"/>
             </geometry>
             <material name="color"/>
         </visual>
     </link>
 
-    <joint name="gt_jRightShoulder_rotx" type="revolute">
+    <joint name="upt_jRightShoulder_rotx" type="revolute">
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <parent link="gt_RightShoulder"/>
-        <child link="gt_RightUpperArm_f1"/>
+        <parent link="upt_RightShoulder"/>
+        <child link="upt_RightUpperArm_f1"/>
         <dynamics damping="0.1" friction="0.0"/>
         <limit effort="30" velocity="1.0" lower="-2.35619" upper="1.5708" />
         <axis xyz="1 0 0" />
     </joint>
 
-    <link name="gt_RightUpperArm_f1">
+    <link name="upt_RightUpperArm_f1">
         <inertial>
             <mass value="0"/>
             <origin xyz="0 0 0" rpy="0 0 0" />
@@ -173,16 +78,16 @@
         </inertial>
     </link>
 
-    <joint name="gt_jRightShoulder_rotz" type="revolute">
+    <joint name="upt_jRightShoulder_rotz" type="revolute">
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <parent link="gt_RightUpperArm_f1"/>
-        <child link="gt_RightUpperArm_f2"/>
+        <parent link="upt_RightUpperArm_f1"/>
+        <child link="upt_RightUpperArm_f2"/>
         <dynamics damping="0.1" friction="0.0"/>
         <limit effort="30" velocity="1.0" lower="-0.785398" upper="1.5708" />
         <axis xyz="0 0 1" />
     </joint>
 
-    <link name="gt_RightUpperArm_f2">
+    <link name="upt_RightUpperArm_f2">
         <inertial>
             <mass value="0"/>
             <origin xyz="0 0 0" rpy="0 0 0" />
@@ -190,21 +95,21 @@
         </inertial>
     </link>
 
-    <joint name="gt_jRightShoulder_roty" type="revolute">
+    <joint name="upt_jRightShoulder_roty" type="revolute">
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <parent link="gt_RightUpperArm_f2"/>
-        <child link="gt_RightUpperArm"/>
+        <parent link="upt_RightUpperArm_f2"/>
+        <child link="upt_RightUpperArm"/>
         <dynamics damping="0.1" friction="0.0"/>
         <limit effort="30" velocity="1.0" lower="-1.5708" upper="1.5708" />
         <axis xyz="0 1 0" />
     </joint>
 
     <!-- elbow, 3 dof -->
-    <link name="gt_RightUpperArm">
+    <link name="upt_RightUpperArm">
         <inertial>
             <mass value="2.181"/>
 			<!--COM origin wrt jRightShoulder-->
-            <origin xyz="0    -0.15         0" rpy="0 0 0" />
+            <origin xyz="0    -0.15          0" rpy="0 0 0" />
             <inertia ixx="0.020332" iyy="0.0013806" izz="0.020332" ixy="0" ixz="0" iyz="0"/>
         </inertial>
 
@@ -227,16 +132,16 @@
 
     </link>
 
-    <joint name="gt_jRightElbow_rotz" type="revolute">
+    <joint name="upt_jRightElbow_rotz" type="revolute">
         <origin xyz="0 -0.299 0" rpy="0 0 0"/>
-        <parent link="gt_RightUpperArm"/>
-        <child link="gt_RightForeArm"/>
+        <parent link="upt_RightUpperArm"/>
+        <child link="upt_RightForeArm"/>
         <dynamics damping="0.1" friction="0.0"/>
         <limit effort="30" velocity="1.0" lower="0" upper="2.53073" />
         <axis xyz="0 0 1" />
     </joint>
 
-    <link name="gt_RightForeArm">
+    <link name="upt_RightForeArm">
         <inertial>
             <mass value="1.454"/>
 			<!--COM origin wrt jRightElbow-->
@@ -263,16 +168,16 @@
 
     </link>
 
-    <joint name="gt_jRightElbow_roty" type="revolute">
+    <joint name="upt_jRightElbow_roty" type="revolute">
         <origin xyz="0 -0.248 0" rpy="0 0 0"/>
-        <parent link="gt_RightForeArm"/>
-        <child link="gt_RightForeArm_f1"/>
+        <parent link="upt_RightForeArm"/>
+        <child link="upt_RightForeArm_f1"/>
         <dynamics damping="0.1" friction="0.0"/>
         <limit effort="30" velocity="1.0" lower="-1.5708" upper="1.48353" />
         <axis xyz="0 1 0" />
     </joint>
 
-    <link name="gt_RightForeArm_f1">
+    <link name="upt_RightForeArm_f1">
         <inertial>
             <mass value="0"/>
             <origin xyz="0 0 0" rpy="0 0 0" />
@@ -288,16 +193,16 @@
     </link>
 
     <!-- wrist 2 dofs -->
-    <joint name="gt_jRightWrist_rotx" type="revolute">
+    <joint name="upt_jRightWrist_rotx" type="revolute">
         <origin xyz="0    0  0" rpy="0 0 0"/>
-        <parent link="gt_RightForeArm_f1"/>
-        <child link="gt_RightHand_f1"/>
+        <parent link="upt_RightForeArm_f1"/>
+        <child link="upt_RightHand_f1"/>
         <dynamics damping="0.1" friction="0.0"/>
         <limit effort="30" velocity="1.0" lower="-1.5708" upper="1.5708" />
         <axis xyz="1 0 0" />
     </joint>
 
-    <link name="gt_RightHand_f1">
+    <link name="upt_RightHand_f1">
         <inertial>
             <mass value="0"/>
             <origin xyz="0 0 0" rpy="0 0 0" />
@@ -305,16 +210,16 @@
         </inertial>
     </link>
 
-    <joint name="gt_jRightWrist_rotz" type="revolute">
+    <joint name="upt_jRightWrist_rotz" type="revolute">
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <parent link="gt_RightHand_f1"/>
-        <child link="gt_RightHand"/>
+        <parent link="upt_RightHand_f1"/>
+        <child link="upt_RightHand"/>
         <dynamics damping="0.1" friction="0.0"/>
         <limit effort="30" velocity="1.0" lower="-0.723599" upper="0.549066" />
         <axis xyz="0 0 1" />
     </joint>
 
-    <link name="gt_RightHand">
+    <link name="upt_RightHand">
         <inertial>
             <mass value="0.4362"/>
 			<!--COM origin wrt jRightWrist-->
@@ -340,13 +245,13 @@
         </collision>
 
     </link>
-    <joint name="gt_jRightHand_COM" type="fixed">
+    <joint name="upt_jRightHand_COM" type="fixed">
         <origin xyz="0 -0.07 0" rpy="0 0 0"/>
-        <parent link="gt_RightHand"/>
-        <child link="gt_RightHandCOM"/>
+        <parent link="upt_RightHand"/>
+        <child link="upt_RightHandCOM"/>
         <axis xyz="0 0 0" />
     </joint>
-    <link name="gt_RightHandCOM">
+    <link name="upt_RightHandCOM">
         <inertial>
             <mass value="0.00001"/>
             <origin xyz="0 0 0" rpy="0 0 0" />

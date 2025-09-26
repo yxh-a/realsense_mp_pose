@@ -7,6 +7,7 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <ament_index_cpp/get_package_share_directory.hpp>
+#include <std_msgs/msg/float32_multi_array.hpp>
 
 #include <pinocchio/fwd.hpp>
 #include <pinocchio/multibody/model.hpp>
@@ -26,7 +27,7 @@ public:
 
 private:
     // Callbacks
-    void joint_state_callback(const sensor_msgs::msg::JointState::SharedPtr msg);
+    void joint_state_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg);
 
     // Pinocchio model and data
     pinocchio::Model model_;
@@ -46,7 +47,7 @@ private:
     tf2_ros::Buffer tf_buffer_;
     tf2_ros::TransformListener tf_listener_;
     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
-    rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub_;
+    rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr joint_state_sub_;
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_publisher_;
     geometry_msgs::msg::TransformStamped tf_shoulder2ee;
 
@@ -76,4 +77,7 @@ private:
     double convergence_threshold = 1e-2; // Threshold for convergence
     double damping_factor = 1e-2; // Damping factor for SVD optimization
     bool print_jacobian = false; // Print Jacobian matrix during optimization
+
+    // velocity smoothing
+    std::vector<std::vector<double>> dq_window_;
 };

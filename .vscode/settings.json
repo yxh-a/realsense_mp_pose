@@ -105,7 +105,10 @@
         "typeindex": "cpp",
         "typeinfo": "cpp",
         "valarray": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "core": "cpp",
+        "numericaldiff": "cpp",
+        "specialfunctions": "cpp"
     },
     "github.copilot.chat.codeGeneration.useInstructionFiles": true
 }

@@ -4,6 +4,8 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
+        - /Global Options1
+        - /Status1
         - /RobotModel1
         - /RobotModel1/Mass Properties1
         - /RobotModel1/Description Topic1
@@ -42,7 +44,7 @@ Visualization Manager:
       Cell Size: 1
       Class: rviz_default_plugins/Grid
       Color: 160; 160; 164
-      Enabled: true
+      Enabled: false
       Line Style:
         Line Width: 0.029999999329447746
         Value: Lines
@@ -55,7 +57,7 @@ Visualization Manager:
       Plane: XY
       Plane Cell Count: 10
       Reference Frame: world
-      Value: true
+      Value: false
     - Alpha: 1
       Class: rviz_default_plugins/RobotModel
       Collision Enabled: false
@@ -66,7 +68,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /optimized_arm/robot_description
+        Value: /updated_arm/robot_description
       Enabled: true
       Links:
         All Links Enabled: true
@@ -78,49 +80,49 @@ Visualization Manager:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        opt_RightForeArm:
+        upt_RightForeArm:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        opt_RightForeArm_f1:
+        upt_RightForeArm_f1:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        opt_RightHand:
+        upt_RightHand:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        opt_RightHandCOM:
+        upt_RightHandCOM:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        opt_RightHand_f1:
+        upt_RightHand_f1:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        opt_RightShoulder:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        opt_RightUpperArm:
+        upt_RightShoulder:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        opt_RightUpperArm_f1:
+        upt_RightUpperArm:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        opt_RightUpperArm_f2:
+          Value: true
+        upt_RightUpperArm_f1:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        opt_Trunk:
+        upt_RightUpperArm_f2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        upt_Trunk:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -134,149 +136,22 @@ Visualization Manager:
       Value: true
       Visual Enabled: true
     - Class: rviz_default_plugins/TF
-      Enabled: true
+      Enabled: false
       Filter (blacklist): ""
       Filter (whitelist): ""
       Frame Timeout: 15
       Frames:
         All Enabled: false
-        RightForearm_gt:
-          Value: false
-        RightHand:
-          Value: false
-        RightHand (Ground Truth):
-          Value: true
-        RightHandCOM:
-          Value: false
-        RightHand_gt:
-          Value: false
-        RightShoulder:
-          Value: false
-        RightUpperArm_gt:
-          Value: false
-        Trunk:
-          Value: false
-        camera_depth_optical_frame:
-          Value: false
-        gt_RightForeArm:
-          Value: false
-        gt_RightForeArm_f1:
-          Value: false
-        gt_RightHand:
-          Value: false
-        gt_RightHandCOM:
-          Value: false
-        gt_RightHand_f1:
-          Value: false
-        gt_RightShoulder:
-          Value: false
-        gt_RightUpperArm:
-          Value: false
-        gt_RightUpperArm_f1:
-          Value: false
-        gt_RightUpperArm_f2:
-          Value: false
-        gt_Trunk:
-          Value: false
-        lbr_floating_link:
-          Value: false
-        lbr_link_0:
-          Value: false
-        lbr_link_1:
-          Value: false
-        lbr_link_2:
-          Value: false
-        lbr_link_3:
-          Value: false
-        lbr_link_4:
-          Value: false
-        lbr_link_5:
-          Value: false
-        lbr_link_6:
-          Value: false
-        lbr_link_7:
-          Value: false
-        lbr_link_ee:
-          Value: false
-        opt_RightForeArm:
-          Value: false
-        opt_RightForeArm_f1:
-          Value: false
-        opt_RightHand:
-          Value: false
-        opt_RightHandCOM:
-          Value: true
-        opt_RightHand_f1:
-          Value: false
-        opt_RightShoulder:
-          Value: false
-        opt_RightUpperArm:
-          Value: false
-        opt_RightUpperArm_f1:
-          Value: false
-        opt_RightUpperArm_f2:
-          Value: false
-        opt_Trunk:
-          Value: false
-        world:
-          Value: false
       Marker Scale: 1
       Name: TF
       Show Arrows: false
       Show Axes: true
       Show Names: false
       Tree:
-        world:
-          camera_depth_optical_frame:
-            RightHand (Ground Truth):
-              {}
-            RightShoulder:
-              Trunk:
-                {}
-            gt_RightShoulder:
-              RightForearm_gt:
-                {}
-              RightHand_gt:
-                {}
-              RightUpperArm_gt:
-                {}
-              gt_RightUpperArm_f1:
-                gt_RightUpperArm_f2:
-                  gt_RightUpperArm:
-                    gt_RightForeArm:
-                      gt_RightForeArm_f1:
-                        gt_RightHand_f1:
-                          gt_RightHand:
-                            gt_RightHandCOM:
-                              {}
-              gt_Trunk:
-                {}
-            opt_RightShoulder:
-              opt_RightUpperArm_f1:
-                opt_RightUpperArm_f2:
-                  opt_RightUpperArm:
-                    opt_RightForeArm:
-                      opt_RightForeArm_f1:
-                        opt_RightHand_f1:
-                          opt_RightHand:
-                            opt_RightHandCOM:
-                              {}
-              opt_Trunk:
-                {}
-          lbr_floating_link:
-            lbr_link_0:
-              lbr_link_1:
-                lbr_link_2:
-                  lbr_link_3:
-                    lbr_link_4:
-                      lbr_link_5:
-                        lbr_link_6:
-                          lbr_link_7:
-                            lbr_link_ee:
-                              {}
+        {}
       Update Interval: 0
-      Value: true
-    - Alpha: 0.5
+      Value: false
+    - Alpha: 0.10000000149011612
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
         Max Value: 10
@@ -288,7 +163,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: RGB8
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 4096
@@ -308,20 +183,19 @@ Visualization Manager:
         Value: /camera/camera/depth/color/points
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
+      Enabled: false
       Name: MarkerArray
       Namespaces:
-        "": true
-        right_arm_text: true
+        {}
       Topic:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /pose_marker
-      Value: true
+      Value: false
     - Alpha: 1
       Class: rviz_default_plugins/RobotModel
       Collision Enabled: false
@@ -417,7 +291,22 @@ Visualization Manager:
         Expand Joint Details: false
         Expand Link Details: false
         Expand Tree: false
+        Head:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         Link Tree Style: Links in Alphabetic Order
+        Neck:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        T8:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         camera_depth_optical_frame:
           Alpha: 1
           Show Axes: false
@@ -464,11 +353,6 @@ Visualization Manager:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        gt_Trunk:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
       Mass Properties:
         Inertia: false
         Mass: false
@@ -508,7 +392,22 @@ Visualization Manager:
         Expand Joint Details: false
         Expand Link Details: false
         Expand Tree: false
+        Head:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         Link Tree Style: Links in Alphabetic Order
+        Neck:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        T8:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         camera_depth_optical_frame:
           Alpha: 1
           Show Axes: false
@@ -555,11 +454,6 @@ Visualization Manager:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        gt_Trunk:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
       Mass Properties:
         Inertia: false
         Mass: false
@@ -570,7 +464,7 @@ Visualization Manager:
       Visual Enabled: true
   Enabled: true
   Global Options:
-    Background Color: 48; 48; 48
+    Background Color: 255; 255; 255
     Fixed Frame: world
     Frame Rate: 30
   Name: root
@@ -629,10 +523,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.0222855806350708
+      Pitch: 0.2922859787940979
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 0.06558243930339813
+      Yaw: 3.837430000305176
     Saved: ~
 Window Geometry:
   Displays:

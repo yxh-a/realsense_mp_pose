@@ -16,7 +16,8 @@ setup(
             ['config/right_arm.urdf', 
              'config/right_arm.rviz',
              'config/right_arm_gt.urdf',
-             'config/right_arm_opt.urdf']),
+             'config/right_arm_opt.urdf',
+             'config/right_arm_upt.urdf']),
     ],
     install_requires=[
         'setuptools',

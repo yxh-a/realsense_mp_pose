@@ -6,6 +6,7 @@ from scipy.spatial.transform import Rotation as R
 from ament_index_python.packages import get_package_share_directory
 import os
 from sensor_msgs.msg import JointState
+from std_msgs.msg import Float32MultiArray
 from tf2_geometry_msgs import TransformStamped
 # from urdfpy import URDF
 
@@ -57,7 +58,7 @@ class Arm_Solver_Node(Node):
         [-1,  0,  0]   # z_shoulder = -x_camera
         ])
 
-        self.joint_state_publisher = self.create_publisher(JointState, 'arm/joint_states', 10)
+        self.joint_state_publisher = self.create_publisher(Float32MultiArray, 'arm/joint_states', 10)
 
         # implement median filter for joint angles 4 x window size
         self.joint_angles_buffer = {
@@ -65,8 +66,8 @@ class Arm_Solver_Node(Node):
             'theta_shoulder_y': [],
             'theta_shoulder_z': [],
             'theta_elbow': [],
+            'prosup': [],
             'theta_wrist_x': [],
-            'theta_wrist_y': [],
             'theta_wrist_z': []
         }
         self.joint_angles_buffer_size = 5  # size of the buffer for median filter
@@ -82,7 +83,7 @@ class Arm_Solver_Node(Node):
 
             # Elbow (2 DoF)
             'theta_elbow_z':    (0.0,       2.53073),  # (   0°,  145°)  jRightElbow_rotz
-            'theta_elbow_y':    (-1.5708,   1.48353),  # ( -90°,   85°)  jRightElbow_roty
+            'prosup':    (-1.5708,   1.48353),  # ( -90°,   85°)  jRightElbow_roty
 
             # Wrist (2 DoF)
             'theta_wrist_x':    (-0.872665, 1.0472),   # ( -50°,   60°)  jRightWrist_rotx
@@ -97,7 +98,7 @@ class Arm_Solver_Node(Node):
 
             # Elbow: flex/extend can move quickly in tasks; set a bit higher
             'theta_elbow_z':    4.0,   # ≈ 229°/s
-            'theta_elbow_y':    3.0,   # ≈ 172°/s
+            'prosup':    3.0,   # ≈ 172°/s
 
             # Wrist: often tested at 150–210°/s in isokinetic protocols — keep similar/under
             'theta_wrist_x':    3.5,   # ≈ 201°/s (flex/extend)
@@ -116,14 +117,14 @@ class Arm_Solver_Node(Node):
     def transform_to_shoulder_frame(self,p_camera):
         return self.R_cam2shoulder @ p_camera
     
-    def publish_joint_states(self, theta_shoulder_x, theta_shoulder_y, theta_shoulder_z, theta_elbow, theta_wrist_x, theta_wrist_y, theta_wrist_z):
+    def publish_joint_states(self, theta_shoulder_x, theta_shoulder_y, theta_shoulder_z, theta_elbow, prosup, theta_wrist_x, theta_wrist_z):
         # Apply median filter to joint angles
         self.joint_angles_buffer['theta_shoulder_x'].append(theta_shoulder_x)
         self.joint_angles_buffer['theta_shoulder_y'].append(theta_shoulder_y)
         self.joint_angles_buffer['theta_shoulder_z'].append(theta_shoulder_z)
         self.joint_angles_buffer['theta_elbow'].append(theta_elbow)
+        self.joint_angles_buffer['prosup'].append(prosup)
         self.joint_angles_buffer['theta_wrist_x'].append(theta_wrist_x)
-        self.joint_angles_buffer['theta_wrist_y'].append(theta_wrist_y)
         self.joint_angles_buffer['theta_wrist_z'].append(theta_wrist_z)
 
         if len(self.joint_angles_buffer['theta_shoulder_x']) > self.joint_angles_buffer_size:
@@ -131,8 +132,8 @@ class Arm_Solver_Node(Node):
             self.joint_angles_buffer['theta_shoulder_y'].pop(0)
             self.joint_angles_buffer['theta_shoulder_z'].pop(0)
             self.joint_angles_buffer['theta_elbow'].pop(0)
+            self.joint_angles_buffer['prosup'].pop(0)
             self.joint_angles_buffer['theta_wrist_x'].pop(0)
-            self.joint_angles_buffer['theta_wrist_y'].pop(0)
             self.joint_angles_buffer['theta_wrist_z'].pop(0)
 
         theta_shoulder_x = np.mean(self.joint_angles_buffer['theta_shoulder_x'])
@@ -140,28 +141,18 @@ class Arm_Solver_Node(Node):
         theta_shoulder_z = np.mean(self.joint_angles_buffer['theta_shoulder_z'])
         theta_elbow = np.mean(self.joint_angles_buffer['theta_elbow'])
         theta_wrist_x = np.mean(self.joint_angles_buffer['theta_wrist_x'])
-        theta_wrist_y = np.mean(self.joint_angles_buffer['theta_wrist_y'])
         theta_wrist_z = np.mean(self.joint_angles_buffer['theta_wrist_z'])
-        
+        prosup = np.mean(self.joint_angles_buffer['prosup'])
+
     
-        # pbulish joint states
-        joint_states = JointState()
-        joint_states.header.stamp = self.get_clock().now().to_msg()
-        joint_states.name = [
-            'opt_jRightShoulder_rotx',
-            'opt_jRightShoulder_rotz',
-            'opt_jRightShoulder_roty',
-            'opt_jRightElbow_rotz',
-            'opt_jRightElbow_roty',
-            'opt_jRightWrist_rotx',
-            'opt_jRightWrist_rotz'
-        ]
-        joint_states.position = [
+        # publish joint states
+        joint_states = Float32MultiArray()
+        joint_states.data = [
             np.radians(theta_shoulder_x),  # Shoulder x rotation
             np.radians(theta_shoulder_z),  # Shoulder z rotation
             np.radians(theta_shoulder_y),  # Shoulder y rotation
             np.radians(theta_elbow),        # Elbow rotation
-            np.radians(theta_wrist_y),  # Wrist y rotation
+            np.radians(prosup),  # Prosup rotation
             np.radians(theta_wrist_x),  # Wrist x rotation
             np.radians(theta_wrist_z)   # Wrist z rotation
         ]
@@ -272,9 +263,9 @@ class Arm_Solver_Node(Node):
         # self.get_logger().info(f"palm reach length: {np.linalg.norm(w):.2f} m")
         # solve last three degreee of freedom with w and v
         # theta_wrist_x, theta_wrist_y, theta_wrist_z = self.get_3DOF_joint_angles(v, w)
-        theta_wrist_x, theta_wrist_y, theta_wrist_z = 0.0, -30.0, 0.0
+        prosup, theta_wrist_x, theta_wrist_z = -40.0, -30.0, 0.0
         # Publish the joint states
-        self.publish_joint_states(theta_shoulder_x, theta_shoulder_y, theta_shoulder_z, theta_elbow_deg, theta_wrist_x, theta_wrist_y, theta_wrist_z)
+        self.publish_joint_states(theta_shoulder_x-7, theta_shoulder_y, theta_shoulder_z, theta_elbow_deg+15, prosup, theta_wrist_x, theta_wrist_z)
 
 
 
