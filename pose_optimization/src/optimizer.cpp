@@ -88,6 +88,22 @@ PoseOptimizer::PoseOptimizer()
         RCLCPP_WARN(this->get_logger(), "No optimization method specified, using default SVD");
         method_ = "NLopt";  // Default to NLopt if not specified
     }
+    if (config["sensitivity_analysis"])
+    {
+        apply_sensitivity = config["sensitivity_analysis"]["apply_sensitivity"].as<bool>(false);
+        sigma_sh_x = config["sensitivity_analysis"]["sigma_sh_x"].as<double>(0.0);
+        sigma_sh_y = config["sensitivity_analysis"]["sigma_sh_y"].as<double>(0.0);
+        sigma_sh_z = config["sensitivity_analysis"]["sigma_sh_z"].as<double>(0.0);
+        RCLCPP_INFO(this->get_logger(), "Sensitivity analysis: apply=%d, sigma_sh_x=%.4f, sigma_sh_y=%.4f, sigma_sh_z=%.4f",
+            apply_sensitivity, sigma_sh_x,  sigma_sh_y, sigma_sh_z);
+    }
+    else
+    {
+        apply_sensitivity = false;
+        sigma_sh_x = 0.0;
+        sigma_sh_y = 0.0;
+        sigma_sh_z = 0.0;
+    }
 
     if (method_ == "NLopt")
     {

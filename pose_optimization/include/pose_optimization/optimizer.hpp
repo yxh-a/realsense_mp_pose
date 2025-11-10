@@ -80,4 +80,12 @@ private:
 
     // velocity smoothing
     std::vector<std::vector<double>> dq_window_;
+
+
+    //sensitivity analysis parameters
+    double sigma_sh_x;
+    double sigma_sh_y;
+    double sigma_sh_z;
+    bool apply_sensitivity;
+
 };

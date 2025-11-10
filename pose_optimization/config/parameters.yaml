@@ -1,8 +1,10 @@
 ee2hand:
-  # translation: [-0.02, 0.0, 0.07]  # x, y, z in meters
-  translation: [-0.06706253, -0.00179535, 0.10661123]
-  # rotation: [0.6965434814850009, -0.12339100960418944, -0.6959888703149829, 0.12329367196773267]
-  rotation: [-0.548193210021664, 0.41193305091399596, 0.7270256562319896, -0.0350579695829072]
+  translation: [-0.09917277 , 0.00565809 , 0.07177507] #y motion
+  rotation: [-0.5511851645887941, 0.3996510340664562, 0.7312376526605968, -0.04201738495261773] # y motion
+
+  # translation: [-0.0192054 , -0.01007333, 0.07440475] #z motion
+  # rotation: [-0.5890074234509467, 0.2732182596988888, 0.7587816627860343, 0.05169551147293741] # z motion
+
 
 operational:
     method: "NLopt"  # Method to use for optimization, e.g., "SVD", "Levenberg-Marquardt"
@@ -17,9 +19,9 @@ NLopt:
   algorithm: "LN_COBYLA"  # Optimization algorithm to use, e.g., "LD_LBFGS", "LN_COBYLA"
   max_iterations: 300  # Maximum iterations for NLopt
   tolerance: 1e-3  # Tolerance for convergence
-  pos_weight: 8.0  # Weight for position error in cost function
-  rot_weight: 2.0  # Weight for rotation error in cost function
-  joint_weights: [2.0, 1.0, 1.0, 1.0, 0.0, 0.0, 2.0]  # Weights for joint angles
+  pos_weight: 7.0  # Weight for position error in cost function
+  rot_weight: 3.0  # Weight for rotation error in cost function
+  joint_weights: [1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0]  # Weights for joint angles
   joint_penalty_weight: 0.7  # Penalty weight for joint angles
   acceleration_weight: 0.1  # Weight for acceleration in cost function
   velocity_weight: 0.1  # Weight for velocity in cost function
@@ -32,4 +34,11 @@ SVD:
 
 # initial_joint_states: [-1.8662461835704307, 0.8590559575694462, -0.6697032662556018, 0.21030423026992587, 0.0, 0.0, 0.0]
 initial_joint_states: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Initial joint states for the arm
-  
+
+
+sensitivity_analysis:
+    apply_sensitivity: true  # Whether to apply sensitivity analysis
+    sigma_sh_x: 0.01  # Sensitivity for shoulder x psosition
+    sigma_sh_y: 0.01  # Sensitivity for shoulder y position
+    sigma_sh_z: 0.01  # Sensitivity for shoulder z position
+    
