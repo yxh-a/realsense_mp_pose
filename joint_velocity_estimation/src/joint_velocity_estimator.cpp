@@ -120,6 +120,23 @@ public:
 
     T_handee_ = T_eehand_.inverse();
     
+    if (config["sensitivity_analysis"])
+    {
+        apply_sensitivity = config["sensitivity_analysis"]["apply_sensitivity"].as<bool>(false);
+        sigma_sh_x = config["sensitivity_analysis"]["sigma_sh_x"].as<double>(0.0);
+        sigma_sh_y = config["sensitivity_analysis"]["sigma_sh_y"].as<double>(0.0);
+        sigma_sh_z = config["sensitivity_analysis"]["sigma_sh_z"].as<double>(0.0);
+        RCLCPP_INFO(this->get_logger(), "Sensitivity analysis: apply=%d, sigma_sh_x=%.4f, sigma_sh_y=%.4f, sigma_sh_z=%.4f",
+            apply_sensitivity, sigma_sh_x,  sigma_sh_y, sigma_sh_z);
+    }
+    else
+    {
+        apply_sensitivity = false;
+        sigma_sh_x = 0.0;
+        sigma_sh_y = 0.0;
+        sigma_sh_z = 0.0;
+    }
+    
     // initialize Kalman filter
     RCLCPP_INFO(this->get_logger(), "Initializing Kalman filter...");
     std::string kf_config_path = ament_index_cpp::get_package_share_directory("joint_velocity_estimation") + "/config/joint_velocity_config.yaml";
@@ -392,6 +409,12 @@ private:
   };
 
   double t_vis_,now_;
+
+  //sensitivity analysis parameters
+  double sigma_sh_x;
+  double sigma_sh_y;
+  double sigma_sh_z;
+  bool apply_sensitivity;
 
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_sub_; 
   rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr twist_pub_;

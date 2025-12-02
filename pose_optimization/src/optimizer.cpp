@@ -91,18 +91,14 @@ PoseOptimizer::PoseOptimizer()
     if (config["sensitivity_analysis"])
     {
         apply_sensitivity = config["sensitivity_analysis"]["apply_sensitivity"].as<bool>(false);
-        sigma_sh_x = config["sensitivity_analysis"]["sigma_sh_x"].as<double>(0.0);
-        sigma_sh_y = config["sensitivity_analysis"]["sigma_sh_y"].as<double>(0.0);
-        sigma_sh_z = config["sensitivity_analysis"]["sigma_sh_z"].as<double>(0.0);
-        RCLCPP_INFO(this->get_logger(), "Sensitivity analysis: apply=%d, sigma_sh_x=%.4f, sigma_sh_y=%.4f, sigma_sh_z=%.4f",
-            apply_sensitivity, sigma_sh_x,  sigma_sh_y, sigma_sh_z);
+        sigma = config["sensitivity_analysis"]["sigma"].as<double>(0.001);
+        RCLCPP_INFO(this->get_logger(), "Sensitivity analysis: apply=%d, sigma=%.4f",
+            apply_sensitivity, sigma);
     }
     else
     {
         apply_sensitivity = false;
-        sigma_sh_x = 0.0;
-        sigma_sh_y = 0.0;
-        sigma_sh_z = 0.0;
+        sigma = 0.0;
     }
 
     if (method_ == "NLopt")
@@ -184,6 +180,9 @@ PoseOptimizer::PoseOptimizer()
     int window_size_ = 5;
     dq_window_.resize(window_size_, std::vector<double>(7, 0.0));
 
+    noise = Eigen::Vector3d::Zero();
+    R_noise = Eigen::Matrix3d::Zero();
+
 }
 
 
@@ -200,7 +199,15 @@ double PoseOptimizer::costFunction(unsigned n, const double* x, double* grad, vo
     pinocchio::forwardKinematics(self->model_, self->data_, q);
     pinocchio::updateFramePlacements(self->model_, self->data_);
 
-    pinocchio::SE3 T_model = self->data_.oMf[self->hand_idx];
+
+    pinocchio::SE3 T_bh = self->data_.oMf[self->hand_idx];
+    pinocchio::SE3 T_bs = self->data_.oMf[self->sh_idx];
+    if (self->apply_sensitivity)
+    {
+        T_bh.translation() += self->noise;
+        T_bh.rotation() = T_bh.rotation() * self->R_noise;
+    }
+    pinocchio::SE3 T_model = T_bs.inverse() * T_bh;
     pinocchio::SE3 delta = self->T_shoulder_hand_ref.inverse() * T_model;
     pinocchio::Motion error_twist = pinocchio::log6(delta);
 
@@ -259,7 +266,8 @@ void PoseOptimizer::joint_state_callback(const std_msgs::msg::Float32MultiArray:
     geometry_msgs::msg::TransformStamped tf;
     try
     {
-        tf_shoulder2ee = tf_buffer_.lookupTransform("camera_depth_optical_frame","lbr_link_ee", tf2::TimePointZero);
+        // tf_shoulder2ee = tf_buffer_.lookupTransform("camera_depth_optical_frame","lbr_link_ee", tf2::TimePointZero);
+        tf_shoulder2ee = tf_buffer_.lookupTransform("upt_RightShoulder", "lbr_link_ee", tf2::TimePointZero);
     }
     catch (const tf2::TransformException &ex)
     {
@@ -295,7 +303,31 @@ void PoseOptimizer::joint_state_callback(const std_msgs::msg::Float32MultiArray:
     // current estimate of shoulder to hand transform
     T_base_hand = data_.oMf[hand_idx];
     T_base_shoulder = data_.oMf[sh_idx];
+
+    // apply sensitivity analysis if enabled
+
     T_shoulder_hand = T_base_shoulder.inverse() * T_base_hand;
+
+    if (apply_sensitivity)
+    {
+        static std::default_random_engine generator;
+        static std::normal_distribution<double> dist_x(0.0, sigma);
+        static std::normal_distribution<double> dist_y(0.0, sigma);
+        static std::normal_distribution<double> dist_z(0.0, sigma);
+        noise = Eigen::Vector3d(dist_x(generator), dist_y(generator), dist_z(generator));
+        T_shoulder_hand.translation() += noise;
+
+        // apply roational noise
+        static std::normal_distribution<double> dist_rot_x(0.0, sigma/0.6);
+        static std::normal_distribution<double> dist_rot_y(0.0, sigma/0.6);
+        static std::normal_distribution<double> dist_rot_z(0.0, sigma/0.6);
+        Eigen::Vector3d rot_noise(dist_rot_x(generator), dist_rot_y(generator), dist_rot_z(generator));
+        Eigen::AngleAxisd aa_x(rot_noise[0], Eigen::Vector3d::UnitX());
+        Eigen::AngleAxisd aa_y(rot_noise[1], Eigen::Vector3d::UnitY());
+        Eigen::AngleAxisd aa_z(rot_noise[2], Eigen::Vector3d::UnitZ());
+        R_noise = (aa_z * aa_y * aa_x).toRotationMatrix();
+        T_shoulder_hand.rotation() = T_shoulder_hand.rotation() * R_noise;
+    }
     // check if there is nan in the current estimate
     if (!T_shoulder_hand.rotation().allFinite() ||
         !T_shoulder_hand.translation().allFinite()) {
@@ -307,11 +339,10 @@ void PoseOptimizer::joint_state_callback(const std_msgs::msg::Float32MultiArray:
     pinocchio::SE3 delta_T = T_shoulder_hand_ref.inverse() * T_shoulder_hand;
     pinocchio::Motion error_twist = pinocchio::log6(delta_T);
 
-    
     // publish ground truth transform from shoulder to hand
     geometry_msgs::msg::TransformStamped gt_transform;
     gt_transform.header.stamp = tf_shoulder2ee.header.stamp;
-    gt_transform.header.frame_id = "camera_depth_optical_frame";
+    gt_transform.header.frame_id = "upt_RightShoulder";
     gt_transform.child_frame_id = "RightHand (Ground Truth)";
     gt_transform.transform.translation.x = shoulder_to_hand_ref.translation().x();
     gt_transform.transform.translation.y = shoulder_to_hand_ref.translation().y();
@@ -321,8 +352,17 @@ void PoseOptimizer::joint_state_callback(const std_msgs::msg::Float32MultiArray:
     gt_transform.transform.rotation.x = q_gt.x();
     gt_transform.transform.rotation.y = q_gt.y();
     gt_transform.transform.rotation.z = q_gt.z();
+    // gt_transform.transform.translation.x = T_shoulder_hand.translation()[0];
+    // gt_transform.transform.translation.y = T_shoulder_hand.translation()[1];
+    // gt_transform.transform.translation.z = T_shoulder_hand.translation()[2];
+    // Eigen::Quaterniond q_gt(T_shoulder_hand.rotation());
+    // gt_transform.transform.rotation.w = q_gt.w();
+    // gt_transform.transform.rotation.x = q_gt.x();
+    // gt_transform.transform.rotation.y = q_gt.y();
+    // gt_transform.transform.rotation.z = q_gt.z();
     // RCLCPP_INFO(this->get_logger(), "Publishing ground truth transform from RightShoulder to RightHand");
     tf_broadcaster_->sendTransform(gt_transform);
+
 
     //correct the shoulder to hand transform using the error
     if (print_error_before_loop)
@@ -360,76 +400,6 @@ void PoseOptimizer::joint_state_callback(const std_msgs::msg::Float32MultiArray:
             q[i] = x[i];
         }
     }
-    if (method_ == "SVD")
-    {
-        // Apply SVD optimization as 100 iterations
-        for (int i = 0; i < max_iterations; ++i)
-        {
-            pinocchio::forwardKinematics(model_, data_, q);
-            pinocchio::updateFramePlacements(model_, data_);
-            // calculate the Jacobian for the hand frame
-            pinocchio::computeJointJacobians(model_, data_, q);
-            pinocchio::framesForwardKinematics(model_, data_, q);
-
-            Eigen::MatrixXd J = Eigen::MatrixXd::Zero(6, model_.nq);
-
-            pinocchio::getFrameJacobian(model_, data_, hand_idx, pinocchio::LOCAL, J);
-
-            // turn reference shoulder to hand transform into Pinocchio SE3
-            pinocchio::SE3 delta_T = T_shoulder_hand_ref.inverse() * T_shoulder_hand;
-            pinocchio::Motion error_twist = pinocchio::log6(delta_T);
-
-            Eigen::VectorXd error_vector(6);
-            error_vector = error_twist.toVector();
-            if (error_vector.norm() < convergence_threshold) // convergence criterion
-            {
-                RCLCPP_INFO(this->get_logger(), "Converged after %d iterations", i);
-                break;
-            }
-
-            if (print_error_in_loop)
-            {
-                RCLCPP_INFO(this->get_logger(), "Iteration %d: Error norm = %.6f", i, error_vector.norm());
-            }
-
-
-            const auto &hand_frame = model_.frames[hand_idx];
-            // log frame type
-            if (print_joint_angles)
-            {
-                RCLCPP_INFO(this->get_logger(), "Joint angles in %d iteration: %f, %f, %f, %f, %f, %f, %f",
-                    i, q[0], q[1], q[2], q[3], q[4], q[5], q[6]);
-            }
-            if (print_jacobian)
-            {
-                RCLCPP_INFO(this->get_logger(), "Calculating Jacobian for frame: %s", hand_frame.name.c_str());
-                RCLCPP_INFO(this->get_logger(), "Frame type: %d", static_cast<int>(hand_frame.type));
-                RCLCPP_INFO(this->get_logger(), "Jacobian size: %d x %d", J.rows(), J.cols());
-                // Print the Jacobian if required
-                for (int j = 0; j < model_.nq; ++j) {
-                    double col_norm = J.col(j).norm();
-                    RCLCPP_INFO(this->get_logger(), "Joint %s: Jacobian column norm = %.6f", joint_names_[j].c_str(), col_norm);
-                }
-            }
-
-            // damped least squares inverse
-            Eigen::MatrixXd JJt = J* J.transpose();
-            float damping_factor = error_vector.norm() * damping_factor; // damping factor based on error norm
-            Eigen::MatrixXd damping_matrix = damping_factor * Eigen::MatrixXd::Identity(6,6);
-            Eigen::MatrixXd J_pinv = J.transpose() * (JJt + damping_matrix).inverse();
-
-            // joint update
-            Eigen::VectorXd dq = J_pinv * error_vector;
-            if (!dq.allFinite())
-            {
-                RCLCPP_ERROR(this->get_logger(), "Non-finite values in dq, quit SVD loop");
-                break;
-            }
-            q = q + dq;
-
-        }
-    }
-    // RCLCPP_INFO(this->get_logger(), "SVD optimization completed");
     // publish the optimized joint states
     sensor_msgs::msg::JointState optimized_joint_state;
     optimized_joint_state.header.stamp = this->get_clock()->now();

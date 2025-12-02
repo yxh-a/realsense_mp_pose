@@ -1,5 +1,6 @@
 ee2hand:
-  translation: [-0.09917277 , 0.00565809 , 0.07177507] #y motion
+  translation: [0.00294718, 0.02414458, 0.1025374] #y motion
+  # translation: [-0.0, 0.0, 0.0] # no motion
   rotation: [-0.5511851645887941, 0.3996510340664562, 0.7312376526605968, -0.04201738495261773] # y motion
 
   # translation: [-0.0192054 , -0.01007333, 0.07440475] #z motion
@@ -11,7 +12,7 @@ operational:
 
     print_error_before_loop: false  # Print error before optimization loop
     print_error_in_loop: false  # Print error after optimization loop
-    print_error_after_loop: false  # Print error after optimization loop
+    print_error_after_loop: true  # Print error after optimization loop
     print_joint_angles: false  # Print joint angles during optimization
 
     baseline_hz: 20  # Baseline frequency for optimization
@@ -38,7 +39,4 @@ initial_joint_states: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Initial joint state
 
 sensitivity_analysis:
     apply_sensitivity: true  # Whether to apply sensitivity analysis
-    sigma_sh_x: 0.01  # Sensitivity for shoulder x psosition
-    sigma_sh_y: 0.01  # Sensitivity for shoulder y position
-    sigma_sh_z: 0.01  # Sensitivity for shoulder z position
-    
+    sigma: 0.2

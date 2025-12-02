@@ -9,7 +9,7 @@
     <joint name="opt_world_to_shoulder" type="fixed">
         <parent link="camera_depth_optical_frame"/>
         <child link="opt_RightShoulder"/>
-        <origin xyz="-0.10466341 -0.122376    1.07400005" rpy="3.14 1.57 0"/> 
+        <origin xyz="-0.10466341 -0.122376    1.00400005" rpy="3.14 1.57 0"/> 
         <!-- y motion -->
         <!-- <origin xyz="-0.10466341 -0.122376    1.02" rpy="3.14 1.57 0"/> -->
          <!-- z motion -->

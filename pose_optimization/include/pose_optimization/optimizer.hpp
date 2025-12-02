@@ -83,9 +83,9 @@ private:
 
 
     //sensitivity analysis parameters
-    double sigma_sh_x;
-    double sigma_sh_y;
-    double sigma_sh_z;
+    double sigma;
     bool apply_sensitivity;
+    Eigen::Vector3d noise;
+    Eigen::Matrix3d R_noise;
 
 };
