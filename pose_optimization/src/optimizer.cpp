@@ -18,7 +18,7 @@ PoseOptimizer::PoseOptimizer()
 {   
     // Load the URDF model into Pinocchio
     RCLCPP_INFO(this->get_logger(), "Loading robot model...");
-    std::string urdf_path = ament_index_cpp::get_package_share_directory("image_pose_tracking") + "/config/right_arm_opt.urdf";
+    std::string urdf_path = ament_index_cpp::get_package_share_directory("image_pose_tracking") + "/config/right_arm.urdf";
 
     pinocchio::urdf::buildModel(urdf_path, model_);
     data_ = pinocchio::Data(model_);
@@ -27,10 +27,6 @@ PoseOptimizer::PoseOptimizer()
     for (int i = 1; i < model_.njoints; ++i)  // start from 1 to skip universe joint
         joint_names_.push_back(model_.names[i]);
 
-    RCLCPP_INFO(this->get_logger(), "Model has %d joints and %d DOF", model_.njoints - 1, model_.nq);
-    RCLCPP_INFO(this->get_logger(), "Joint names:");
-    for (const auto &name : joint_names_)
-        RCLCPP_INFO(this->get_logger(), "  %s", name.c_str());
 
     q = Eigen::VectorXd::Zero(model_.nq);
     q_init_ = q; // Initialize with zero joint angles
@@ -40,10 +36,16 @@ PoseOptimizer::PoseOptimizer()
     have_prev2_ = false;
     
     RCLCPP_INFO(this->get_logger(), "Robot model loaded with %d DOF", model_.nq);
-    RCLCPP_INFO(this->get_logger(), "Joint names: %s", 
-        std::accumulate(joint_names_.begin(), joint_names_.end(), std::string(),
-            [](const std::string& a, const std::string& b) { return a + (a.length() > 0 ? ", " : "") + b; }).c_str());
+    
 
+    // add a "opt_" prefix to joint names for optimization variables
+    opt_joint_names_.reserve(joint_names_.size());
+    for (const auto &name : joint_names_)
+        opt_joint_names_.push_back("opt_" + name);
+
+    RCLCPP_INFO(this->get_logger(), "Joint names: %s", 
+        std::accumulate(opt_joint_names_.begin(), opt_joint_names_.end(), std::string(),
+            [](const std::string& a, const std::string& b) { return a + (a.length() > 0 ? ", " : "") + b; }).c_str());
     // TF Hand-to-EE transform
     // read the hand-to-EE transform from the YAML file
     RCLCPP_INFO(this->get_logger(), "Loading hand-to-EE transform from YAML");
@@ -82,6 +84,7 @@ PoseOptimizer::PoseOptimizer()
         print_error_after_loop = config["operational"]["print_error_after_loop"].as<bool>(false);
         print_error_in_loop = config["operational"]["print_error_in_loop"].as<bool>(false);
         print_joint_angles = config["operational"]["print_joint_angles"].as<bool>(false);
+        print_critical_transforms = config["operational"]["print_critical_transforms"].as<bool>(false);
     }
     else
     {
@@ -135,16 +138,6 @@ PoseOptimizer::PoseOptimizer()
         RCLCPP_INFO(this->get_logger(), "NLopt optimization initialized.");
 
     }
-    if (method_ == "SVD")
-    {
-        RCLCPP_INFO(this->get_logger(), "Using SVD for optimization");
-        max_iterations = config["SVD"]["max_iterations"].as<int>(100);
-        convergence_threshold = config["SVD"]["convergence_threshold"].as<double>(1e-2);
-        damping_factor = config["SVD"]["damping_factor"].as<double>(0.01);
-        RCLCPP_INFO(this->get_logger(), "SVD parameters: max_iterations=%d, convergence_threshold=%.6f, damping_factor=%.6f",
-            max_iterations, convergence_threshold, damping_factor);
-    }
-        
     // getting method from the yaml
     ee_to_hand_ = Eigen::Isometry3d::Identity();
     Eigen::Quaterniond q (rotation[3], rotation[0], rotation[1], rotation[2]);
@@ -164,8 +157,8 @@ PoseOptimizer::PoseOptimizer()
         "/optimized_arm/joint_states", 10);
     
     // kinematics constants
-    hand_idx = model_.getFrameId("opt_RightHandCOM");
-    sh_idx = model_.getFrameId("opt_RightShoulder");
+    hand_idx = model_.getFrameId("RightHandCOM");
+    sh_idx = model_.getFrameId("RightShoulder");
 
     // Subscribe to joint states
     RCLCPP_INFO(this->get_logger(), "Subscribing to joint states on /arm/joint_states");
@@ -201,13 +194,12 @@ double PoseOptimizer::costFunction(unsigned n, const double* x, double* grad, vo
 
 
     pinocchio::SE3 T_bh = self->data_.oMf[self->hand_idx];
-    pinocchio::SE3 T_bs = self->data_.oMf[self->sh_idx];
     if (self->apply_sensitivity)
     {
         T_bh.translation() += self->noise;
         T_bh.rotation() = T_bh.rotation() * self->R_noise;
     }
-    pinocchio::SE3 T_model = T_bs.inverse() * T_bh;
+    pinocchio::SE3 T_model = T_bh;
     pinocchio::SE3 delta = self->T_shoulder_hand_ref.inverse() * T_model;
     pinocchio::Motion error_twist = pinocchio::log6(delta);
 
@@ -267,7 +259,7 @@ void PoseOptimizer::joint_state_callback(const std_msgs::msg::Float32MultiArray:
     try
     {
         // tf_shoulder2ee = tf_buffer_.lookupTransform("camera_depth_optical_frame","lbr_link_ee", tf2::TimePointZero);
-        tf_shoulder2ee = tf_buffer_.lookupTransform("upt_RightShoulder", "lbr_link_ee", tf2::TimePointZero);
+        tf_shoulder2ee = tf_buffer_.lookupTransform("RightShoulder", "lbr_link_ee", tf2::TimePointZero);
     }
     catch (const tf2::TransformException &ex)
     {
@@ -293,8 +285,6 @@ void PoseOptimizer::joint_state_callback(const std_msgs::msg::Float32MultiArray:
         RCLCPP_ERROR(this->get_logger(), "Invalid shoulder_to_hand_ref transform (NaNs detected)");
         return;
     }
-    
-    
 
     // turn it into Pinocchio SE3
     T_shoulder_hand_ref.translation() = shoulder_to_hand_ref.translation();
@@ -302,11 +292,14 @@ void PoseOptimizer::joint_state_callback(const std_msgs::msg::Float32MultiArray:
         
     // current estimate of shoulder to hand transform
     T_base_hand = data_.oMf[hand_idx];
-    T_base_shoulder = data_.oMf[sh_idx];
+    if (print_critical_transforms) {
+        RCLCPP_INFO(this->get_logger(), "T_base_hand translation: [%.4f, %.4f, %.4f]", 
+            T_base_hand.translation()[0], T_base_hand.translation()[1], T_base_hand.translation()[2]);
+    }
 
     // apply sensitivity analysis if enabled
 
-    T_shoulder_hand = T_base_shoulder.inverse() * T_base_hand;
+    T_shoulder_hand = T_base_hand;
 
     if (apply_sensitivity)
     {
@@ -329,6 +322,11 @@ void PoseOptimizer::joint_state_callback(const std_msgs::msg::Float32MultiArray:
         T_shoulder_hand.rotation() = T_shoulder_hand.rotation() * R_noise;
     }
     // check if there is nan in the current estimate
+    if (print_critical_transforms) {
+        RCLCPP_INFO(this->get_logger(), "T_shoulder_hand translation: [%.4f, %.4f, %.4f]", 
+            T_shoulder_hand.translation()[0], T_shoulder_hand.translation()[1], T_shoulder_hand.translation()[2]);
+    }
+
     if (!T_shoulder_hand.rotation().allFinite() ||
         !T_shoulder_hand.translation().allFinite()) {
         RCLCPP_ERROR(this->get_logger(), "Invalid T_shoulder_hand transform (NaNs detected)");
@@ -342,7 +340,7 @@ void PoseOptimizer::joint_state_callback(const std_msgs::msg::Float32MultiArray:
     // publish ground truth transform from shoulder to hand
     geometry_msgs::msg::TransformStamped gt_transform;
     gt_transform.header.stamp = tf_shoulder2ee.header.stamp;
-    gt_transform.header.frame_id = "upt_RightShoulder";
+    gt_transform.header.frame_id = "RightShoulder";
     gt_transform.child_frame_id = "RightHand (Ground Truth)";
     gt_transform.transform.translation.x = shoulder_to_hand_ref.translation().x();
     gt_transform.transform.translation.y = shoulder_to_hand_ref.translation().y();
@@ -403,12 +401,12 @@ void PoseOptimizer::joint_state_callback(const std_msgs::msg::Float32MultiArray:
     // publish the optimized joint states
     sensor_msgs::msg::JointState optimized_joint_state;
     optimized_joint_state.header.stamp = this->get_clock()->now();
-    optimized_joint_state.name = joint_names_;
+    optimized_joint_state.name = opt_joint_names_;
     optimized_joint_state.position.resize(model_.nq);
     for (size_t i = 0; i < model_.nq; ++i)
     {   
         if (!std::isfinite(q[i])) {
-            RCLCPP_ERROR(this->get_logger(), "Non-finite value in joint %s: %f", joint_names_[i].c_str(), q[i]);
+            RCLCPP_ERROR(this->get_logger(), "Non-finite value in joint %s: %f", opt_joint_names_[i].c_str(), q[i]);
             return;
         }
         optimized_joint_state.position[i] = q[i];
@@ -451,4 +449,12 @@ void PoseOptimizer::joint_state_callback(const std_msgs::msg::Float32MultiArray:
     q_prev_ = q;
     have_prev_ = true;
 
+}
+int main(int argc, char** argv)
+{
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<PoseOptimizer>();
+    rclcpp::spin(node);
+    rclcpp::shutdown();
+    return 0;
 }

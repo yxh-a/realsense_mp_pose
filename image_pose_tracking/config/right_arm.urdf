@@ -4,17 +4,15 @@
         <color rgba="0 0 1 1"/>
     </material>
 
-    <link name="camera_depth_optical_frame"/>
+    <!-- <link name="camera_depth_optical_frame"/>
 
     <joint name="world_to_shoulder" type="fixed">
         <parent link="camera_depth_optical_frame"/>
         <child link="RightShoulder"/>
         <origin xyz="-0.10466341 -0.122376    1.00400005" rpy="3.14 1.57 0"/> 
-         <!-- y motion -->
-        <!-- <origin xyz="-0.10466341 -0.122376    1.02" rpy="3.14 1.57 0"/> -->
-        <!-- z motion -->
-    </joint>
-        <!-- === Trunk slab (torso) === -->
+    </joint> -->
+
+    <!-- === Trunk slab (torso) === -->
     <link name="Trunk">
         <inertial>
             <!-- Give it a small but nonzero mass to avoid NaNs -->

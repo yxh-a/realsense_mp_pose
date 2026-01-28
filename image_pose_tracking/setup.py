@@ -13,11 +13,9 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'config'), 
-            ['config/right_arm.urdf', 
-             'config/right_arm.rviz',
-             'config/right_arm_gt.urdf',
-             'config/right_arm_opt.urdf',
-             'config/right_arm_upt.urdf']),
+            ['config/right_arm.urdf.xacro', 
+             'config/right_arm.urdf',
+             'config/right_arm.rviz']),
     ],
     install_requires=[
         'setuptools',
@@ -33,7 +31,6 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'pose_tracking = image_pose_tracking.pose_tracking:main',
             'forward_solver = image_pose_tracking.arm_solver_forward:main',
             'keypoint_extraction = image_pose_tracking.mediapipe_kp:main',
             'pointcloud_extraction = image_pose_tracking.pointcloud_extraction:main',

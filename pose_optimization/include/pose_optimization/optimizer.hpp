@@ -33,6 +33,7 @@ private:
     pinocchio::Model model_;
     pinocchio::Data data_;
     std::vector<std::string> joint_names_;
+    std::vector<std::string> opt_joint_names_;
     Eigen::VectorXd q_init_, q, q_prev_, q_prev2_;
     bool have_prev_, have_prev2_;
     double w_vel_, w_acc_;
@@ -63,6 +64,7 @@ private:
     bool print_error_after_loop = false;
     bool print_error_in_loop = false;
     bool print_joint_angles = false;
+    bool print_critical_transforms = true;
     
     // Nlopt optimization parameters
     std::string algorithm = "LN_COBYLA"; // Default algorithm
@@ -72,11 +74,6 @@ private:
     double rot_weight = 1.0; // Weight for rotation error in cost function
     std::vector<double> joint_weights = {10, 10, 10, 10, 1.0, 1.0, 1.0}; // Weights for joint angles
     double joint_penalty_weight = 1; // Penalty weight for joint angles
-
-    // SVD optimization parameters
-    double convergence_threshold = 1e-2; // Threshold for convergence
-    double damping_factor = 1e-2; // Damping factor for SVD optimization
-    bool print_jacobian = false; // Print Jacobian matrix during optimization
 
     // velocity smoothing
     std::vector<std::vector<double>> dq_window_;

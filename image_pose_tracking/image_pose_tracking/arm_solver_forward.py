@@ -1,3 +1,4 @@
+from matplotlib.transforms import Transform
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseArray, Pose
@@ -8,6 +9,7 @@ import os
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float32MultiArray
 from tf2_geometry_msgs import TransformStamped
+from tf2_ros import TransformBroadcaster
 # from urdfpy import URDF
 
 
@@ -51,6 +53,7 @@ class Arm_Solver_Node(Node):
         self.wrist_translation = np.array([0.0, 0.0, 0.0])
         self.elbow_translation = np.array([0.0, 0.0, 0.0])
         self.shoulder_translation = np.array([0.0, 0.0, 0.0])
+        self.left_shoulder_translation = np.array([0.0, 0.0, 0.0])
 
         self.R_cam2shoulder = np.array([
         [ 0,  0, -1],  # x_shoulder = -z_camera
@@ -109,6 +112,8 @@ class Arm_Solver_Node(Node):
         self.time = self.get_clock().now()
         self.dt = 0.0
 
+        # setup TF broadcaster
+        self.tf_broadcaster = TransformBroadcaster(self)
         
 
         self.get_logger().info("URDF file loaded successfully.")
@@ -217,13 +222,71 @@ class Arm_Solver_Node(Node):
         # 2. if the motion is continuous, i.e. limit the change of angles between frames
         return
 
+    def make_tf(self, parent, child, xyz, quat):
+        t = TransformStamped()
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = parent
+        t.child_frame_id = child
+        t.transform.translation.x = float(xyz[0])
+        t.transform.translation.y = float(xyz[1])
+        t.transform.translation.z = float(xyz[2])
+       
+        t.transform.rotation.x = quat[0]
+        t.transform.rotation.y = quat[1]
+        t.transform.rotation.z = quat[2]
+        t.transform.rotation.w = quat[3]
+        return t
+        
+    def publish_shoudler_transform(self):
+        # get the vector from right shoulder to left shoulder
+        k = self.left_shoulder_translation - self.shoulder_translation
+        # normalize k
+        k_normalized = normalize(k)
+        self.get_logger().info(f"Shoulder vector: {k_normalized}")
+        # get the rotation angle around y axis by projecty this vector to xz plane
+        k_xz = np.array([k_normalized[0], 0, k_normalized[2]])
+        k_xz_normalized = normalize(k_xz)
+        angle_y = np.arctan2(k_xz_normalized[2], k_xz_normalized[0])
+        if k_normalized[2] < 0:
+            angle_y = -angle_y
+        
+        angle_y = -angle_y  # negate to get the correct rotation direction
+        self.get_logger().info(f"Shoulder yaw angle: {np.degrees(angle_y):.2f} degrees")
+
+
+        # basic rotation from camera frame to shoulder frame
+        # rpy is [3.14, 1.57, 0])
+        true_rotation = R.from_euler('xyz', [3.14, 1.57 + angle_y, 0]).as_quat()  # in xyzw format
+
+
+        t1 = self.make_tf(
+            parent='camera_depth_optical_frame',
+            child='RightShoulder',
+            xyz=self.shoulder_translation,
+            quat=[true_rotation[0], true_rotation[1], true_rotation[2], true_rotation[3]]
+        )
+        t2 = self.make_tf(
+            parent='camera_depth_optical_frame',
+            child='gt_RightShoulder',
+            xyz=self.shoulder_translation,
+            quat=[true_rotation[0], true_rotation[1], true_rotation[2], true_rotation[3]]
+        )
+        t3 = self.make_tf(
+            parent='camera_depth_optical_frame',
+            child='upt_RightShoulder',
+            xyz=self.shoulder_translation,
+            quat=[true_rotation[0], true_rotation[1], true_rotation[2], true_rotation[3]]
+        )
+        self.tf_broadcaster.sendTransform([t1, t2, t3])
+        return
+    
     def pose_callback(self, msg: PoseArray):
         
         self.dt = (self.time - self.get_clock().now()).nanoseconds * 1e-9  # convert to seconds
         self.time = self.get_clock().now()
 
-        if len(msg.poses) < 3:
-            # self.get_logger().warn("Received insufficient poses for IK calculation.")
+        if len(msg.poses) < 4:
+            self.get_logger().warn("Received insufficient poses for IK calculation.")
             return
         
         # Extract the positions of the wrist, elbow, and shoulder from the PoseArray
@@ -247,16 +310,30 @@ class Arm_Solver_Node(Node):
             shoulder_pose.position.y,
             shoulder_pose.position.z
         ])
-        self.get_logger().info(f"Received shoulder: {self.shoulder_translation}")
+
+        left_shoulder_pose = msg.poses[3]
+        self.left_shoulder_translation = np.array([
+            left_shoulder_pose.position.x,
+            left_shoulder_pose.position.y,
+            left_shoulder_pose.position.z
+        ])
+
+        # dynamically publish the shoulder position as a static transform
+        self.publish_shoudler_transform()
+
+        # self.get_logger().info(f"Received shoulder: {self.shoulder_translation}")
         # Transform the wrist, elbow, and shoulder positions to the shoulder frame
         self.wrist_translation = self.transform_to_shoulder_frame(self.wrist_translation)
         self.elbow_translation = self.transform_to_shoulder_frame(self.elbow_translation)
         self.shoulder_translation = self.transform_to_shoulder_frame(self.shoulder_translation)
+        self.left_shoulder_translation = self.transform_to_shoulder_frame(self.left_shoulder_translation)
 
-        # Calculate the upper arm vector u and lower arm vector v
+
+        # Calculate the upper arm vector u and lower arm vector v and shoulder vector k
         u = self.elbow_translation - self.shoulder_translation
         v = self.wrist_translation - self.elbow_translation
-
+        k = self.left_shoulder_translation - self.shoulder_translation
+        
 
         theta_shoulder_x, theta_shoulder_y, theta_shoulder_z, theta_elbow_deg = self.get_4DOF_joint_angles(u, v)
 
@@ -266,6 +343,7 @@ class Arm_Solver_Node(Node):
         prosup, theta_wrist_x, theta_wrist_z = -20.0, -30.0, 0.0
         # Publish the joint states
         self.publish_joint_states(theta_shoulder_x-7, theta_shoulder_y, theta_shoulder_z, theta_elbow_deg-10, prosup, theta_wrist_x, theta_wrist_z)
+
 
 
 

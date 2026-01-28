@@ -24,8 +24,12 @@ pkg_check_modules(NLOPT REQUIRED nlopt)
 # find_package(<dependency> REQUIRED)
 add_executable(optimizer
 src/optimizer.cpp
-src/main.cpp
 )
+
+add_executable(joint_velocity_estimator
+src/joint_velocity_estimator.cpp
+)
+
 
 ament_target_dependencies(optimizer
   rclcpp
@@ -37,7 +41,22 @@ ament_target_dependencies(optimizer
   ament_index_cpp
 )
 
+ament_target_dependencies(joint_velocity_estimator
+  rclcpp
+  geometry_msgs
+  tf2_geometry_msgs
+  pinocchio
+  sensor_msgs
+  std_msgs
+  ament_index_cpp
+)
+
+
 target_include_directories(optimizer PRIVATE
+  include
+)
+
+target_include_directories(joint_velocity_estimator PRIVATE
   include
 )
 
@@ -47,8 +66,19 @@ target_link_libraries(optimizer
   ${NLOPT_LIBRARIES}
 )
 
+target_link_libraries(joint_velocity_estimator
+  ${catkin_LIBRARIES}
+  yaml-cpp
+)
+target_compile_features(joint_velocity_estimator PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+
+
 # Install the executable
 install(TARGETS optimizer
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(TARGETS joint_velocity_estimator
   DESTINATION lib/${PROJECT_NAME}
 )
 

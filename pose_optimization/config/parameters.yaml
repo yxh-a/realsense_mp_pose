@@ -12,8 +12,9 @@ operational:
 
     print_error_before_loop: false  # Print error before optimization loop
     print_error_in_loop: false  # Print error after optimization loop
-    print_error_after_loop: true  # Print error after optimization loop
+    print_error_after_loop: false  # Print error after optimization loop
     print_joint_angles: false  # Print joint angles during optimization
+    print_critical_transforms: false  # Print critical transforms during optimization
 
     baseline_hz: 20  # Baseline frequency for optimization
 NLopt:
@@ -27,16 +28,36 @@ NLopt:
   acceleration_weight: 0.1  # Weight for acceleration in cost function
   velocity_weight: 0.1  # Weight for velocity in cost function
 
-SVD:
-  max_iterations: 100  # Maximum iterations for SVD
-  convergence_threshold: 1e-2  # Threshold for convergence
-  damping_factor: 0.1  # Damping factor for optimization
-  print_jacobian: false  # Print Jacobian matrix during optimization
-
 # initial_joint_states: [-1.8662461835704307, 0.8590559575694462, -0.6697032662556018, 0.21030423026992587, 0.0, 0.0, 0.0]
 initial_joint_states: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Initial joint states for the arm
 
 
 sensitivity_analysis:
-    apply_sensitivity: true  # Whether to apply sensitivity analysis
-    sigma: 0.2
+    apply_sensitivity: false  # Whether to apply sensitivity analysis
+    sigma: 0.1
+
+
+velocity_estimation:
+  # ===== Core KF (state x = [q, dq]) =====
+  kf:
+    q_q: 1.0e-2            # process noise on q   (rad/s)^2 per tick
+    q_dq: 1.0e-2             # process noise on dq  (rad/s^2)^2 per tick
+    q_a: 1.0e-2             # process noise on acceleration (rad/s^3)^2 per tick --- IGNORE ---
+
+    control_rate_hz: 200.0  # used to set KF dt (fallback if timestamp deltas look bad)
+
+    sigma_task: 0.5
+    sigma_null: 2.0
+
+    r_sigma_lin: 0.05
+    r_sigma_rot: 0.05
+    sigma_q: 0.1
+    sigma_dq: 0.3
+
+    acc_cap: 10.0  # cap on max acceleration (rad/s^2)
+
+  # ===== Outputs =====
+  output:
+    print_velocity: true  # print joint velocities to console
+    print_sigmas: false  # print measurement and task sigmas to console
+    print_arm_joint_velocities: false  # print estimated arm joint velocities to console

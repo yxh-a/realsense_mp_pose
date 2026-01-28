@@ -96,11 +96,13 @@ Visualization Manager:
         RightHandCOM:
           Value: false
         RightShoulder:
-          Value: false
+          Value: true
         Trunk:
           Value: false
         camera_depth_optical_frame:
           Value: true
+        gt_RightShoulder:
+          Value: false
         lbr_floating_link:
           Value: false
         lbr_link_0:
@@ -121,6 +123,8 @@ Visualization Manager:
           Value: false
         lbr_link_ee:
           Value: false
+        upt_RightShoulder:
+          Value: false
         world:
           Value: false
       Marker Scale: 1
@@ -134,6 +138,10 @@ Visualization Manager:
             RightShoulder:
               Trunk:
                 {}
+            gt_RightShoulder:
+              {}
+            upt_RightShoulder:
+              {}
           lbr_floating_link:
             lbr_link_0:
               lbr_link_1:
@@ -382,25 +390,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 1.8639763593673706
+      Distance: 1.4193373918533325
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.6903931498527527
-        Y: 0.1600649505853653
-        Z: 0.2807668447494507
+        X: 0.8032618165016174
+        Y: 0.18265873193740845
+        Z: 0.34398403763771057
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.08728567510843277
+      Pitch: 0.9722853302955627
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 3.4660730361938477
+      Yaw: 2.157890796661377
     Saved: ~
 Window Geometry:
   Displays:
