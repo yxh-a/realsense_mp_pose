@@ -11,8 +11,47 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <stdexcept>
 
 using namespace std::chrono_literals;
+
+namespace {
+
+std::string render_arm_xacro(
+    const std::string &robot_prefix,
+    const std::string &robot_color,
+    double upper_arm_length,
+    double forearm_length)
+{
+    const std::string xacro_path =
+        ament_index_cpp::get_package_share_directory("image_pose_tracking") + "/config/right_arm.urdf.xacro";
+
+    char temp_template[] = "/tmp/right_arm_velocity_XXXXXX.urdf";
+    const int fd = mkstemps(temp_template, 5);
+    if (fd == -1) {
+        throw std::runtime_error("Failed to create temporary URDF path");
+    }
+    std::fclose(fdopen(fd, "w"));
+
+    const std::string command =
+        "xacro " + xacro_path +
+        " robot_prefix:=" + robot_prefix +
+        " robot_color:=" + robot_color +
+        " upper_arm_length:=" + std::to_string(upper_arm_length) +
+        " forearm_length:=" + std::to_string(forearm_length) +
+        " > " + temp_template;
+
+    if (std::system(command.c_str()) != 0) {
+        std::remove(temp_template);
+        throw std::runtime_error("Failed to render right_arm.urdf.xacro");
+    }
+
+    return temp_template;
+}
+
+}  // namespace
 
 // -------------------- DQKalman methods --------------------
 void VelocityEstimator::DQKalman::init(int n_, double dtc_, double Pq0, double Pdq0)
@@ -38,41 +77,53 @@ void VelocityEstimator::DQKalman::set_state(const Eigen::VectorXd& q0, const Eig
     x.tail(n) = dq0;
 }
 
-void VelocityEstimator::DQKalman::predict(double qa)
+void VelocityEstimator::DQKalman::predict(double qa, double velocity_decay, double acc_cap, double dt)
 {
     if (!initialized) return;
 
-    // Constant-velocity model
-    Eigen::MatrixXd F = Eigen::MatrixXd::Identity(2*n, 2*n);
-    F.block(0, n, n, n) = dtc * Eigen::MatrixXd::Identity(n, n);
+    const double step = (dt > 0.0) ? dt : dtc;
+    const double decay = std::clamp(velocity_decay, 0.0, 1.0e6);
+    const double alpha = std::exp(-decay * step);
 
-    const double dt   = dtc;
-    const double dt2  = dt * dt;
-    const double dt3  = dt2 * dt;
+    // Damped-velocity model: dq decays smoothly toward zero, which matches
+    // stop-start human motion better than a pure constant-velocity prior.
+    Eigen::MatrixXd F = Eigen::MatrixXd::Identity(2*n, 2*n);
+    F.block(0, n, n, n) = step * alpha * Eigen::MatrixXd::Identity(n, n);
+    F.block(n, n, n, n) = alpha * Eigen::MatrixXd::Identity(n, n);
+
+    const double dt2  = step * step;
+    const double dt3  = dt2 * step;
 
     // Process noise (continuous white acceleration model)
     Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(2*n, 2*n);
     const double s00 = (dt3 / 3.0) * qa;
     const double s01 = (dt2 / 2.0) * qa;
-    const double s11 =  dt        * qa;
+    const double s11 =  step      * qa;
 
     Q.block(0,0, n,n).setIdentity();  Q.block(0,0, n,n) *= s00;
     Q.block(0,n, n,n).setIdentity();  Q.block(0,n, n,n) *= s01;
     Q.block(n,0, n,n).setIdentity();  Q.block(n,0, n,n) *= s01;
     Q.block(n,n, n,n).setIdentity();  Q.block(n,n, n,n) *= s11;
 
+    Eigen::VectorXd dq_pred = alpha * x.tail(n);
+    if (acc_cap > 0.0) {
+        const double max_dq_change = acc_cap * step;
+        for (int i = 0; i < n; ++i) {
+            const double delta = dq_pred[i] - x[n + i];
+            dq_pred[i] = x[n + i] + std::clamp(delta, -max_dq_change, max_dq_change);
+        }
+    }
+
     // Propagate
-    x.head(n) += dtc * x.tail(n);
+    x.head(n) += step * dq_pred;
+    x.tail(n) = dq_pred;
     P = F * P * F.transpose() + Q;
 }
 
-void VelocityEstimator::DQKalman::correct(
+void VelocityEstimator::DQKalman::correct_task_velocity(
     const Eigen::Matrix<double,6,Eigen::Dynamic>& J,
     const Eigen::Matrix<double,6,1>& v_meas,
-    const Eigen::VectorXd& q_meas,
-    const Eigen::VectorXd& dq_meas,
-    double r_sigma_lin, double r_sigma_rot,
-    double sigma_q, double sigma_dq)
+    double r_sigma_lin, double r_sigma_rot)
 {
     if (!initialized) return;
 
@@ -80,12 +131,27 @@ void VelocityEstimator::DQKalman::correct(
     Eigen::MatrixXd H_v = Eigen::MatrixXd::Zero(6, 2*n);
     H_v.block(0, n, 6, n) = J;
 
-    Eigen::VectorXd z_pred = J * x.tail(n);
-    Eigen::VectorXd r_v    = v_meas - z_pred;
-
     Eigen::Matrix<double,6,6> R_v = Eigen::Matrix<double,6,6>::Zero();
     R_v.block(0,0,3,3).setIdentity(); R_v.block(0,0,3,3) *= (r_sigma_lin*r_sigma_lin);
     R_v.block(3,3,3,3).setIdentity(); R_v.block(3,3,3,3) *= (r_sigma_rot*r_sigma_rot);
+
+    Eigen::VectorXd r_v = v_meas - J * x.tail(n);
+    Eigen::MatrixXd S = H_v * P * H_v.transpose() + R_v;
+    Eigen::MatrixXd K = P * H_v.transpose() * S.ldlt().solve(Eigen::MatrixXd::Identity(6, 6));
+
+    x += K * r_v;
+    const Eigen::MatrixXd IKH = I - K * H_v;
+    P = IKH * P * IKH.transpose() + K * R_v * K.transpose();
+    P = 0.5 * (P + P.transpose());
+}
+
+void VelocityEstimator::DQKalman::correct_joint_measurement(
+    const Eigen::VectorXd& q_meas,
+    const Eigen::VectorXd& dq_meas,
+    double sigma_q,
+    double sigma_dq)
+{
+    if (!initialized) return;
 
     // --- Vision q rows: z_q = q, H_q = [I 0]
     Eigen::MatrixXd H_q = Eigen::MatrixXd::Zero(n, 2*n);
@@ -100,13 +166,12 @@ void VelocityEstimator::DQKalman::correct(
     Eigen::MatrixXd R_dq = (sigma_dq*sigma_dq) * Eigen::MatrixXd::Identity(n,n);
 
     // --- Stack
-    const int rows = 6 + n + n;
+    const int rows = n + n;
     Eigen::MatrixXd H(rows, 2*n);
     Eigen::VectorXd r(rows);
     Eigen::MatrixXd R = Eigen::MatrixXd::Zero(rows, rows);
 
     int o = 0;
-    H.block(o, 0, 6, 2*n) = H_v;  r.segment(o, 6) = r_v;  R.block(o, o, 6, 6) = R_v;  o += 6;
     H.block(o, 0, n, 2*n) = H_q;  r.segment(o, n) = r_q;  R.block(o, o, n, n) = R_q;  o += n;
     H.block(o, 0, n, 2*n) = H_dq; r.segment(o, n) = r_dq; R.block(o, o, n, n) = R_dq; o += n;
 
@@ -115,7 +180,9 @@ void VelocityEstimator::DQKalman::correct(
     Eigen::MatrixXd K = P * H.transpose() * S.ldlt().solve(Eigen::MatrixXd::Identity(rows, rows));
 
     x += K * r;
-    P  = (I - K * H) * P;
+    const Eigen::MatrixXd IKH = I - K * H;
+    P = IKH * P * IKH.transpose() + K * R * K.transpose();
+    P = 0.5 * (P + P.transpose());
 }
 
 Eigen::VectorXd VelocityEstimator::DQKalman::q()  const { return x.head(n); }
@@ -125,6 +192,16 @@ Eigen::VectorXd VelocityEstimator::DQKalman::dq() const { return x.tail(n); }
 VelocityEstimator::VelocityEstimator()
 : rclcpp::Node("joint_velocity_estimator_node")
 {
+    this->declare_parameter<std::string>("robot_prefix", "upt_");
+    this->declare_parameter<std::string>("robot_color", "blue");
+    this->declare_parameter<double>("upper_arm_length", 0.299);
+    this->declare_parameter<double>("forearm_length", 0.248);
+
+    const auto robot_prefix = this->get_parameter("robot_prefix").as_string();
+    const auto robot_color = this->get_parameter("robot_color").as_string();
+    const auto upper_arm_length = this->get_parameter("upper_arm_length").as_double();
+    const auto forearm_length = this->get_parameter("forearm_length").as_double();
+
     RCLCPP_INFO(this->get_logger(), "Initializing robot model...");
 
     // --- Robot model
@@ -152,12 +229,14 @@ VelocityEstimator::VelocityEstimator()
   // --- Human arm model
     RCLCPP_INFO(this->get_logger(), "Initializing human arm model...");
 
-    std::string human_arm_urdf_path = ament_index_cpp::get_package_share_directory("image_pose_tracking")
-                                    + "/config/right_arm.urdf";
+    std::string human_arm_urdf_path = render_arm_xacro(
+        robot_prefix, robot_color, upper_arm_length, forearm_length);
     pinocchio::urdf::buildModel(human_arm_urdf_path, arm_model_);
     arm_data_ = pinocchio::Data(arm_model_);
+    std::remove(human_arm_urdf_path.c_str());
 
-    hand_frame_name_ = "RightHandCOM";
+    shoulder_frame_name_ = robot_prefix + "RightShoulder";
+    hand_frame_name_ = robot_prefix + "RightHandCOM";
     hand_frame_id_ = arm_model_.getFrameId(hand_frame_name_);
 
     q_arm_   = Eigen::VectorXd::Zero(arm_model_.nq);
@@ -223,17 +302,30 @@ VelocityEstimator::VelocityEstimator()
     throw std::runtime_error("Missing parameters in KF YAML");
     }
 
+    use_kalman_filter_ = config["velocity_estimation"]["use_kalman_filter"].as<bool>(true);
+    if (config["velocity_estimation"]["timing"]) {
+    const auto timing_config = config["velocity_estimation"]["timing"];
+    tf_lookup_timeout_sec_ = timing_config["tf_lookup_timeout_sec"].as<double>(0.05);
+    fallback_to_latest_tf_ = timing_config["fallback_to_latest_tf"].as<bool>(true);
+    }
+
     if (config["velocity_estimation"]["kf"]) {
-    q_q_         = config["velocity_estimation"]["kf"]["q_q"].as<double>(1e-2);
-    q_dq_        = config["velocity_estimation"]["kf"]["q_dq"].as<double>(1e-2);
-    q_a_         = config["velocity_estimation"]["kf"]["q_a"].as<double>(1e-1);
-    rate_hz_     = config["velocity_estimation"]["rates"]["control_rate_hz"].as<double>(200.0);
-    sigma_task_  = config["velocity_estimation"]["kf"]["sigma_task"].as<double>(0.5);
-    sigma_null_  = config["velocity_estimation"]["kf"]["sigma_null"].as<double>(0.1);
-    r_sigma_lin_ = config["velocity_estimation"]["kf"]["r_sigma_lin"].as<double>(0.01);
-    r_sigma_rot_ = config["velocity_estimation"]["kf"]["r_sigma_rot"].as<double>(0.01);
-    sigma_q_     = config["velocity_estimation"]["kf"]["sigma_q"].as<double>(0.1);
-    sigma_dq_    = config["velocity_estimation"]["kf"]["sigma_dq"].as<double>(0.1);
+    const auto kf_config = config["velocity_estimation"]["kf"];
+    q_q_         = kf_config["q_q"].as<double>(1e-2);
+    q_dq_        = kf_config["q_dq"].as<double>(1e-2);
+    q_a_         = kf_config["q_a"].as<double>(1e-1);
+    velocity_decay_ = kf_config["velocity_decay"].as<double>(0.0);
+    acc_cap_     = kf_config["acc_cap"].as<double>(10.0);
+    r_sigma_lin_ = kf_config["r_sigma_lin"].as<double>(0.01);
+    r_sigma_rot_ = kf_config["r_sigma_rot"].as<double>(0.01);
+    sigma_q_     = kf_config["sigma_q"].as<double>(0.1);
+    sigma_dq_    = kf_config["sigma_dq"].as<double>(0.1);
+
+    if (kf_config["control_rate_hz"]) {
+        rate_hz_ = kf_config["control_rate_hz"].as<double>(200.0);
+    } else {
+        RCLCPP_WARN(this->get_logger(), "control_rate_hz not found in KF config, using default %.1f Hz", rate_hz_);
+    }
     }
 
     if (config["velocity_estimation"]["output"]) {
@@ -241,16 +333,18 @@ VelocityEstimator::VelocityEstimator()
     print_sigmas_   = config["velocity_estimation"]["output"]["print_sigmas"].as<bool>(true);
     }
 
-    kf_.init(model_.nv, 1.0/200.0, q_q_, q_dq_);
+    kf_.init(model_.nv, 1.0 / rate_hz_, q_q_, q_dq_);
 
 
     // --- Shared initial state
-    v_ee_            = Eigen::VectorXd::Zero(6);
-    v_ee_in_shoulder_= Eigen::VectorXd::Zero(6);
-    v_hand_          = Eigen::VectorXd::Zero(6);
+    v_ee_in_world_ = Eigen::VectorXd::Zero(6);
+    v_hand_in_world_ = Eigen::VectorXd::Zero(6);
+    v_hand_in_shoulder_ = Eigen::VectorXd::Zero(6);
 
     T_worldshoulder_ = pinocchio::SE3::Identity();
     T_shoulderhand_  = pinocchio::SE3::Identity();
+
+    tf_world2shoulder = geometry_msgs::msg::TransformStamped();
 
     // --- TF listener
     tf_buffer_   = std::make_shared<tf2_ros::Buffer>(this->get_clock());
@@ -281,96 +375,173 @@ void VelocityEstimator::jointCallback(const sensor_msgs::msg::JointState::Shared
 
     Eigen::Matrix<double, 6, Eigen::Dynamic> J(6, model_.nv);
     J.setZero();
-    J = pinocchio::getFrameJacobian(model_, data_, ee_frame_id_, pinocchio::WORLD);
+    J = pinocchio::getFrameJacobian(model_, data_, ee_frame_id_, pinocchio::LOCAL_WORLD_ALIGNED);
 
-    v_ee_ = J * dq;
+    v_ee_in_world_ = J * dq;
 
-    geometry_msgs::msg::TwistStamped twist_msg;
-    twist_msg.header.stamp = msg->header.stamp;
-    twist_msg.header.frame_id = "lbr_link_ee";
-    twist_msg.twist.linear.x  = v_ee_[0];
-    twist_msg.twist.linear.y  = v_ee_[1];
-    twist_msg.twist.linear.z  = v_ee_[2];
-    twist_msg.twist.angular.x = v_ee_[3];
-    twist_msg.twist.angular.y = v_ee_[4];
-    twist_msg.twist.angular.z = v_ee_[5];
-    twist_pub_->publish(twist_msg);
-
-    // TF lookup (latest)
+    // Prefer timestamp-aligned TF. During rosbag replay, TF can lag the joint
+    // message by a few milliseconds, so wait briefly before falling back.
     try {
-        tf_shoulder2ee = tf_buffer_->lookupTransform(
-        "RightShoulder",
-        "lbr_link_ee",
-        tf2::TimePointZero);
+        tf_world2shoulder = tf_buffer_->lookupTransform(
+        "lbr_link_0",
+        shoulder_frame_name_,
+        msg->header.stamp,
+        rclcpp::Duration::from_seconds(tf_lookup_timeout_sec_));
     } catch (const tf2::TransformException &ex) {
-        RCLCPP_ERROR(this->get_logger(), "TF lookup failed: %s", ex.what());
-        return;
+        if (!fallback_to_latest_tf_) {
+            RCLCPP_ERROR(this->get_logger(), "TF lookup failed: %s", ex.what());
+            return;
+        }
+
+        try {
+            tf_world2shoulder = tf_buffer_->lookupTransform(
+            "lbr_link_0",
+            shoulder_frame_name_,
+            tf2::TimePointZero);
+            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                                 "Timestamped TF unavailable, using latest TF: %s", ex.what());
+        } catch (const tf2::TransformException &latest_ex) {
+            RCLCPP_ERROR(this->get_logger(), "TF lookup failed: %s", latest_ex.what());
+            return;
+        }
     }
 
     T_worldshoulder_.translation() = Eigen::Vector3d(
-        tf_shoulder2ee.transform.translation.x,
-        tf_shoulder2ee.transform.translation.y,
-        tf_shoulder2ee.transform.translation.z);
+        tf_world2shoulder.transform.translation.x,
+        tf_world2shoulder.transform.translation.y,
+        tf_world2shoulder.transform.translation.z);
 
     Eigen::Quaterniond q_tf(
-        tf_shoulder2ee.transform.rotation.w,
-        tf_shoulder2ee.transform.rotation.x,
-        tf_shoulder2ee.transform.rotation.y,
-        tf_shoulder2ee.transform.rotation.z);
+        tf_world2shoulder.transform.rotation.w,
+        tf_world2shoulder.transform.rotation.x,
+        tf_world2shoulder.transform.rotation.y,
+        tf_world2shoulder.transform.rotation.z);
     T_worldshoulder_.rotation() = q_tf.toRotationMatrix();
 
-    Ad_T = T_worldshoulder_.inverse().toActionMatrix();
-    if (!isValidMatrix(Ad_T)) {
-        RCLCPP_ERROR(this->get_logger(), "Invalid action matrix (NaNs detected)");
+    const Eigen::Vector3d ee_to_hand_world =
+        T_worldee_.rotation() * T_eehand_.translation();
+    const Eigen::Vector3d linear_ee_world = v_ee_in_world_.head<3>();
+    const Eigen::Vector3d angular_world = v_ee_in_world_.tail<3>();
+
+    v_hand_in_world_.head<3>() = linear_ee_world + angular_world.cross(ee_to_hand_world);
+    v_hand_in_world_.tail<3>() = angular_world;
+
+    const Eigen::Matrix3d R_shoulder_world = T_worldshoulder_.rotation().transpose();
+    v_hand_in_shoulder_.head<3>() = R_shoulder_world * v_hand_in_world_.head<3>();
+    v_hand_in_shoulder_.tail<3>() = R_shoulder_world * v_hand_in_world_.tail<3>();
+
+    // print out the comparison of velocity euclidean norm in different frames for debugging
+    if (print_velocity_) {
+        double v_ee_norm = v_ee_in_world_.norm();
+        double v_ee_shoulder_norm = v_hand_in_world_.norm();
+        double v_hand_norm = v_hand_in_shoulder_.norm();
+        RCLCPP_INFO(this->get_logger(), "Velocity norms: v_ee=%.3f, v_ee_in_shoulder=%3f, v_hand=%3f", v_ee_norm, v_ee_shoulder_norm, v_hand_norm); 
+    
+    }
+    
+    geometry_msgs::msg::TwistStamped twist_msg;
+    twist_msg.header.stamp = msg->header.stamp;
+    twist_msg.header.frame_id = shoulder_frame_name_;
+    twist_msg.twist.linear.x  = v_hand_in_shoulder_[0];
+    twist_msg.twist.linear.y  = v_hand_in_shoulder_[1];
+    twist_msg.twist.linear.z  = v_hand_in_shoulder_[2];
+    twist_msg.twist.angular.x = v_hand_in_shoulder_[3];
+    twist_msg.twist.angular.y = v_hand_in_shoulder_[4];
+    twist_msg.twist.angular.z = v_hand_in_shoulder_[5];
+    twist_pub_->publish(twist_msg);
+
+
+    const Eigen::VectorXd q_for_jacobian = use_kalman_filter_ ? kf_.q() : q_arm_;
+    if (!q_for_jacobian.allFinite()) {
+        RCLCPP_ERROR(this->get_logger(), "q_for_jacobian contains non-finite values");
         return;
     }
-    v_ee_in_shoulder_ = Ad_T * v_ee_;
 
-    Ad_T = T_eehand_.toActionMatrix();
-    if (!isValidMatrix(Ad_T)) {
-        RCLCPP_ERROR(this->get_logger(), "Invalid action matrix (NaNs detected)");
-        return;
-    }
-    v_hand_ = Ad_T * v_ee_in_shoulder_;
-
-    // Arm Jacobian
-    pinocchio::computeJointJacobians(arm_model_, arm_data_, q_arm_);
-    pinocchio::framesForwardKinematics(arm_model_, arm_data_, q_arm_);
+    // Arm Jacobian. For KF mode, evaluate at the filter state, not the latest measurement.
+    pinocchio::computeJointJacobians(arm_model_, arm_data_, q_for_jacobian);
+    pinocchio::framesForwardKinematics(arm_model_, arm_data_, q_for_jacobian);
     pinocchio::updateFramePlacements(arm_model_, arm_data_);
 
     Eigen::Matrix<double, 6, Eigen::Dynamic> J_arm(6, arm_model_.nv);
     J_arm.setZero();
-    J_arm = pinocchio::getFrameJacobian(arm_model_, arm_data_, hand_frame_id_, pinocchio::WORLD);
+    J_arm = pinocchio::getFrameJacobian(
+        arm_model_, arm_data_, hand_frame_id_, pinocchio::LOCAL_WORLD_ALIGNED);
     if (!isValidMatrix(J_arm)) {
         RCLCPP_ERROR(this->get_logger(), "Invalid arm Jacobian (NaNs detected)");
         return;
     }
 
-    kf_.predict(q_a_);
-    now_ = this->now().seconds();
-    double latency = now_ - t_vis_;
-    double scale = std::max(1.0, latency / 0.05);
+    Eigen::VectorXd q_arm_updated = q_arm_;
+    if (use_kalman_filter_) {
+        if (!kf_.q().allFinite() || !kf_.dq().allFinite()) {
+            RCLCPP_ERROR(this->get_logger(),
+                         "Kalman state is non-finite before predict. q_finite=%d dq_finite=%d",
+                         kf_.q().allFinite(), kf_.dq().allFinite());
+            return;
+        }
 
-    kf_.correct(J_arm, v_hand_, q_arm_, dq_vis_,
-                r_sigma_lin_, r_sigma_rot_,
-                sigma_q_ * scale, sigma_dq_ * scale);
+        double predict_dt = 1.0 / rate_hz_;
+        const rclcpp::Time current_robot_stamp(msg->header.stamp);
+        if (first_robot_) {
+            const double stamp_dt = (current_robot_stamp - last_robot_stamp_).seconds();
+            if (stamp_dt > 0.0 && stamp_dt < 1.0) {
+                predict_dt = stamp_dt;
+            }
+        } else {
+            first_robot_ = true;
+        }
+        last_robot_stamp_ = current_robot_stamp;
 
-    dq_arm_ = kf_.dq();
+        kf_.predict(q_a_, velocity_decay_, acc_cap_, predict_dt);
+        if (!kf_.q().allFinite() || !kf_.dq().allFinite()) {
+            RCLCPP_ERROR(this->get_logger(),
+                         "Kalman state became non-finite after predict. q_finite=%d dq_finite=%d",
+                         kf_.q().allFinite(), kf_.dq().allFinite());
+            return;
+        }
+
+        kf_.correct_task_velocity(J_arm, v_hand_in_shoulder_,
+                                  r_sigma_lin_, r_sigma_rot_);
+        if (!kf_.q().allFinite() || !kf_.dq().allFinite()) {
+            RCLCPP_ERROR(this->get_logger(),
+                         "Kalman state became non-finite after task-velocity correction. q_finite=%d dq_finite=%d",
+                         kf_.q().allFinite(), kf_.dq().allFinite());
+            return;
+        }
+
+        if (new_vis_measurement_) {
+            kf_.correct_joint_measurement(q_arm_, dq_vis_,
+                                          sigma_q_,
+                                          sigma_dq_);
+            if (!kf_.q().allFinite() || !kf_.dq().allFinite()) {
+                RCLCPP_ERROR(this->get_logger(),
+                             "Kalman state became non-finite after joint correction. q_finite=%d dq_finite=%d",
+                             kf_.q().allFinite(), kf_.dq().allFinite());
+                return;
+            }
+            new_vis_measurement_ = false;
+        }
+
+        dq_arm_ = kf_.dq();
+        q_arm_updated = kf_.q();
+    } else {
+        dq_arm_ = dq_vis_;
+    }
 
     if (print_velocity_) {
         RCLCPP_INFO(this->get_logger(), "Hand velocity: %.3f, %.3f, %.3f, %.3f, %.3f, %.3f",
-                    v_hand_[0], v_hand_[1], v_hand_[2], v_hand_[3], v_hand_[4], v_hand_[5]);
-        RCLCPP_INFO(this->get_logger(), "Estimated arm joint velocities (deg): %f, %f, %f, %f, %f, %f, %f",
+                    v_hand_in_shoulder_[0], v_hand_in_shoulder_[1], v_hand_in_shoulder_[2], v_hand_in_shoulder_[3], v_hand_in_shoulder_[4], v_hand_in_shoulder_[5]);
+        RCLCPP_INFO(this->get_logger(), "%s arm joint velocities (deg): %f, %f, %f, %f, %f, %f, %f",
+                    use_kalman_filter_ ? "Estimated" : "Measured",
                     dq_arm_[0]*180.0/M_PI, dq_arm_[1]*180.0/M_PI, dq_arm_[2]*180.0/M_PI,
                     dq_arm_[3]*180.0/M_PI, dq_arm_[4]*180.0/M_PI, dq_arm_[5]*180.0/M_PI, dq_arm_[6]*180.0/M_PI);
     }
 
     // Publish updated
     sensor_msgs::msg::JointState updated_arm_joint_state;
-    updated_arm_joint_state.header.stamp = this->now();
+    updated_arm_joint_state.header.stamp = msg->header.stamp;
     updated_arm_joint_state.name = joint_names_;
 
-    Eigen::VectorXd q_arm_updated = kf_.q();
     updated_arm_joint_state.position =
         std::vector<double>(q_arm_updated.data(), q_arm_updated.data() + q_arm_updated.size());
     updated_arm_joint_state.velocity =
@@ -381,7 +552,8 @@ void VelocityEstimator::jointCallback(const sensor_msgs::msg::JointState::Shared
 void VelocityEstimator::jointCallback_arm(const sensor_msgs::msg::JointState::SharedPtr msg)
 {
     if (msg->name.size() != static_cast<size_t>(arm_model_.nq) ||
-        msg->position.size() != static_cast<size_t>(arm_model_.nq))
+        msg->position.size() != static_cast<size_t>(arm_model_.nq) ||
+        msg->velocity.size() != static_cast<size_t>(arm_model_.nv))
     {
         RCLCPP_WARN(this->get_logger(), "Arm joint state size mismatch with model.");
         return;
@@ -389,14 +561,24 @@ void VelocityEstimator::jointCallback_arm(const sensor_msgs::msg::JointState::Sh
 
     q_arm_  = Eigen::VectorXd::Map(msg->position.data(), arm_model_.nq);
     dq_vis_ = Eigen::VectorXd::Map(msg->velocity.data(), arm_model_.nv);
-    t_vis_  = this->now().seconds();
+    if (!q_arm_.allFinite() || !dq_vis_.allFinite()) {
+        RCLCPP_ERROR(this->get_logger(),
+                     "Received non-finite arm measurement. q_finite=%d dq_finite=%d",
+                     q_arm_.allFinite(), dq_vis_.allFinite());
+        return;
+    }
+    last_vis_stamp_ = msg->header.stamp;
+    t_vis_  = last_vis_stamp_.seconds();
+    new_vis_measurement_ = true;
 
     pinocchio::forwardKinematics(arm_model_, arm_data_, q_arm_);
     pinocchio::updateFramePlacements(arm_model_, arm_data_);
 
     if (!first_vis_) {
         first_vis_ = true;
-        kf_.set_state(q_arm_, dq_vis_);
+        if (use_kalman_filter_) {
+            kf_.set_state(q_arm_, dq_vis_);
+        }
         return;
     }
 }
@@ -414,8 +596,19 @@ bool VelocityEstimator::isValidMatrix(const Eigen::MatrixXd &M)
 int main(int argc, char** argv)
 {
     rclcpp::init(argc, argv);
-    auto node = std::make_shared<VelocityEstimator>();
-    rclcpp::spin(node);
+    try {
+        auto node = std::make_shared<VelocityEstimator>();
+        rclcpp::spin(node);
+        rclcpp::shutdown();
+        return 0;
+    } catch (const std::exception &ex) {
+        RCLCPP_FATAL(rclcpp::get_logger("joint_velocity_estimator"),
+                     "Failed to start joint_velocity_estimator: %s", ex.what());
+    } catch (...) {
+        RCLCPP_FATAL(rclcpp::get_logger("joint_velocity_estimator"),
+                     "Failed to start joint_velocity_estimator: unknown exception");
+    }
+
     rclcpp::shutdown();
-    return 0;
+    return 1;
 }

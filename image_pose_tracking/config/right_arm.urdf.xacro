@@ -3,6 +3,10 @@
 
     <xacro:property name="prefix" value="$(arg robot_prefix)"/>
     <xacro:property name="color" value="$(arg robot_color)"/>
+    <xacro:property name="upper_arm_length" value="$(arg upper_arm_length)"/>
+    <xacro:property name="upper_arm_com_y" value="${-float(upper_arm_length) / 2.0}"/>
+    <xacro:property name="forearm_length" value="$(arg forearm_length)"/>
+    <xacro:property name="forearm_com_y" value="${-float(forearm_length) / 2.0}"/>
     <xacro:property name="color_code"  value="${
         '0.35 0.55 0.40 1' if color == 'green' 
         else '0.25 0.45 0.65 1' if color == 'blue' 
@@ -117,31 +121,31 @@
         <inertial>
             <mass value="2.181"/>
 			<!--COM origin wrt jRightShoulder-->
-            <origin xyz="0    -0.15           0" rpy="0 0 0" />
+            <origin xyz="0 ${upper_arm_com_y} 0" rpy="0 0 0" />
             <inertia ixx="0.020332" iyy="0.0013806" izz="0.020332" ixy="0" ixz="0" iyz="0"/>
         </inertial>
 
         <visual>
 			<!--box origin wrt jRightShoulder. RPY rotated of pi/2.-->
-            <origin xyz="0    -0.15           0" rpy="1.5708 0 0" />
+            <origin xyz="0 ${upper_arm_com_y} 0" rpy="1.5708 0 0" />
             <geometry>
-                <cylinder length="0.299" radius="0.02"/>
+                <cylinder length="${upper_arm_length}" radius="0.02"/>
             </geometry>
             <material name="color"/>
         </visual>
 
         <collision>
 			<!--box origin wrt jRightShoulder. RPY rotated of pi/2.-->
-            <origin xyz="0    -0.15           0" rpy="1.5708 0 0" />
+            <origin xyz="0 ${upper_arm_com_y} 0" rpy="1.5708 0 0" />
             <geometry>
-                <cylinder length="0.299" radius="0.02"/>
+                <cylinder length="${upper_arm_length}" radius="0.02"/>
             </geometry>
         </collision>
 
     </link>
 
     <joint name="${prefix}jRightElbow_rotz" type="revolute">
-        <origin xyz="0 -0.299 0" rpy="0 0 0"/>
+        <origin xyz="0 ${-float(upper_arm_length)} 0" rpy="0 0 0"/>
         <parent link="${prefix}RightUpperArm"/>
         <child link="${prefix}RightForeArm"/>
         <dynamics damping="0.1" friction="0.0"/>
@@ -153,31 +157,31 @@
         <inertial>
             <mass value="1.454"/>
 			<!--COM origin wrt jRightElbow-->
-            <origin xyz="0    -0.124           0" rpy="0 0 0" />
+            <origin xyz="0 ${forearm_com_y} 0" rpy="0 0 0" />
             <inertia ixx="0.008948" iyy="0.00040906" izz="0.008948" ixy="0" ixz="0" iyz="0"/>
         </inertial>
 
         <visual>
 			<!--box origin wrt jRightElbow. RPY rotated of pi/2.-->
-            <origin xyz="0    -0.124           0" rpy="1.5708 0 0" />
+            <origin xyz="0 ${forearm_com_y} 0" rpy="1.5708 0 0" />
             <geometry>
-                <cylinder length="0.248" radius="0.02"/>
+                <cylinder length="${forearm_length}" radius="0.02"/>
             </geometry>
             <material name="color"/>
         </visual>
 
         <collision>
 			<!--box origin wrt jRightElbow. RPY rotated of pi/2.-->
-            <origin xyz="0    -0.124           0" rpy="1.5708 0 0" />
+            <origin xyz="0 ${forearm_com_y} 0" rpy="1.5708 0 0" />
             <geometry>
-                <cylinder length="0.248" radius="0.02"/>
+                <cylinder length="${forearm_length}" radius="0.02"/>
             </geometry>
         </collision>
 
     </link>
     
     <joint name="${prefix}jRightElbow_roty" type="revolute">
-        <origin xyz="0 -0.248 0" rpy="0 0 0"/>
+        <origin xyz="0 ${-float(forearm_length)} 0" rpy="0 0 0"/>
         <parent link="${prefix}RightForeArm"/>
         <child link="${prefix}RightForeArm_f1"/>
         <dynamics damping="0.1" friction="0.0"/>

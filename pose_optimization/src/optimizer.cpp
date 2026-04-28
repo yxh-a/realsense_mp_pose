@@ -9,16 +9,69 @@
 #include <pinocchio/parsers/urdf.hpp>
 
 #include <yaml-cpp/yaml.h>
+#include <cstdio>
+#include <cstdlib>
+#include <fstream>
 #include <numeric>
+#include <stdexcept>
+
+namespace {
+
+std::string render_arm_xacro(
+    const std::string &robot_prefix,
+    const std::string &robot_color,
+    double upper_arm_length,
+    double forearm_length)
+{
+    const std::string xacro_path =
+        ament_index_cpp::get_package_share_directory("image_pose_tracking") + "/config/right_arm.urdf.xacro";
+
+    char temp_template[] = "/tmp/right_arm_optimizer_XXXXXX.urdf";
+    const int fd = mkstemps(temp_template, 5);
+    if (fd == -1) {
+        throw std::runtime_error("Failed to create temporary URDF path");
+    }
+    std::fclose(fdopen(fd, "w"));
+
+    const std::string command =
+        "xacro " + xacro_path +
+        " robot_prefix:=" + robot_prefix +
+        " robot_color:=" + robot_color +
+        " upper_arm_length:=" + std::to_string(upper_arm_length) +
+        " forearm_length:=" + std::to_string(forearm_length) +
+        " > " + temp_template;
+
+    if (std::system(command.c_str()) != 0) {
+        std::remove(temp_template);
+        throw std::runtime_error("Failed to render right_arm.urdf.xacro");
+    }
+
+    return temp_template;
+}
+
+}  // namespace
 
 PoseOptimizer::PoseOptimizer()
     : Node("pose_optimizer"),
     tf_buffer_(this->get_clock()),
     tf_listener_(tf_buffer_)
 {   
+    this->declare_parameter<std::string>("robot_prefix", "upt_");
+    this->declare_parameter<std::string>("robot_color", "blue");
+    this->declare_parameter<double>("upper_arm_length", 0.299);
+    this->declare_parameter<double>("forearm_length", 0.248);
+
+    const auto robot_prefix = this->get_parameter("robot_prefix").as_string();
+    const auto robot_color = this->get_parameter("robot_color").as_string();
+    const auto upper_arm_length = this->get_parameter("upper_arm_length").as_double();
+    const auto forearm_length = this->get_parameter("forearm_length").as_double();
+    shoulder_frame_name_ = robot_prefix + "RightShoulder";
+    hand_frame_name_ = robot_prefix + "RightHandCOM";
+
     // Load the URDF model into Pinocchio
     RCLCPP_INFO(this->get_logger(), "Loading robot model...");
-    std::string urdf_path = ament_index_cpp::get_package_share_directory("image_pose_tracking") + "/config/right_arm.urdf";
+    std::string urdf_path = render_arm_xacro(
+        robot_prefix, robot_color, upper_arm_length, forearm_length);
 
     pinocchio::urdf::buildModel(urdf_path, model_);
     data_ = pinocchio::Data(model_);
@@ -157,8 +210,8 @@ PoseOptimizer::PoseOptimizer()
         "/optimized_arm/joint_states", 10);
     
     // kinematics constants
-    hand_idx = model_.getFrameId("RightHandCOM");
-    sh_idx = model_.getFrameId("RightShoulder");
+    hand_idx = model_.getFrameId(hand_frame_name_);
+    sh_idx = model_.getFrameId(shoulder_frame_name_);
 
     // Subscribe to joint states
     RCLCPP_INFO(this->get_logger(), "Subscribing to joint states on /arm/joint_states");
@@ -175,6 +228,8 @@ PoseOptimizer::PoseOptimizer()
 
     noise = Eigen::Vector3d::Zero();
     R_noise = Eigen::Matrix3d::Zero();
+
+    std::remove(urdf_path.c_str());
 
 }
 
@@ -237,7 +292,7 @@ void PoseOptimizer::joint_state_callback(const std_msgs::msg::Float32MultiArray:
 {   
     // update the robot state based on the received joint states
 
-    if (msg->data.size() != model_.nq)
+    if (msg->data.size() != static_cast<std::size_t>(model_.nq))
     {
         RCLCPP_ERROR(this->get_logger(), "Received joint states size (%zu) does not match model DOF (%d)", msg->data.size(), model_.nq);
         return;
@@ -259,7 +314,7 @@ void PoseOptimizer::joint_state_callback(const std_msgs::msg::Float32MultiArray:
     try
     {
         // tf_shoulder2ee = tf_buffer_.lookupTransform("camera_depth_optical_frame","lbr_link_ee", tf2::TimePointZero);
-        tf_shoulder2ee = tf_buffer_.lookupTransform("RightShoulder", "lbr_link_ee", tf2::TimePointZero);
+        tf_shoulder2ee = tf_buffer_.lookupTransform(shoulder_frame_name_, "lbr_link_ee", tf2::TimePointZero);
     }
     catch (const tf2::TransformException &ex)
     {
@@ -340,7 +395,7 @@ void PoseOptimizer::joint_state_callback(const std_msgs::msg::Float32MultiArray:
     // publish ground truth transform from shoulder to hand
     geometry_msgs::msg::TransformStamped gt_transform;
     gt_transform.header.stamp = tf_shoulder2ee.header.stamp;
-    gt_transform.header.frame_id = "RightShoulder";
+    gt_transform.header.frame_id = shoulder_frame_name_;
     gt_transform.child_frame_id = "RightHand (Ground Truth)";
     gt_transform.transform.translation.x = shoulder_to_hand_ref.translation().x();
     gt_transform.transform.translation.y = shoulder_to_hand_ref.translation().y();

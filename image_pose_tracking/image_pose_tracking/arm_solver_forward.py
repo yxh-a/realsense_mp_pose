@@ -115,6 +115,9 @@ class Arm_Solver_Node(Node):
         # setup TF broadcaster
         self.tf_broadcaster = TransformBroadcaster(self)
         
+        # set up filter for shoulder transform
+        self.shoulder_transform_buffer = []
+        self.shoulder_transform_buffer_size = 10
 
         self.get_logger().info("URDF file loaded successfully.")
         self.get_logger().info("IK Solver Node Initialized")
@@ -242,7 +245,7 @@ class Arm_Solver_Node(Node):
         k = self.left_shoulder_translation - self.shoulder_translation
         # normalize k
         k_normalized = normalize(k)
-        self.get_logger().info(f"Shoulder vector: {k_normalized}")
+        # self.get_logger().info(f"Shoulder vector: {k_normalized}")
         # get the rotation angle around y axis by projecty this vector to xz plane
         k_xz = np.array([k_normalized[0], 0, k_normalized[2]])
         k_xz_normalized = normalize(k_xz)
@@ -251,31 +254,36 @@ class Arm_Solver_Node(Node):
             angle_y = -angle_y
         
         angle_y = -angle_y  # negate to get the correct rotation direction
-        self.get_logger().info(f"Shoulder yaw angle: {np.degrees(angle_y):.2f} degrees")
+        # self.get_logger().info(f"Shoulder yaw angle: {np.degrees(angle_y):.2f} degrees")
 
 
         # basic rotation from camera frame to shoulder frame
         # rpy is [3.14, 1.57, 0])
-        true_rotation = R.from_euler('xyz', [3.14, 1.57 + angle_y, 0]).as_quat()  # in xyzw format
+        self.shoulder_transform_buffer.append((self.shoulder_translation, angle_y))
+        if len(self.shoulder_transform_buffer) > self.shoulder_transform_buffer_size:
+            self.shoulder_transform_buffer.pop(0)
+        # compute average translation and rotation
+        avg_translation = np.mean([t[0] for t in self.shoulder_transform_buffer], axis=0)
+        avg_rotation = R.from_euler('xyz', [3.14, 1.57 + np.mean([t[1] for t in self.shoulder_transform_buffer]), 0]).as_quat()  # in xyzw format
 
 
         t1 = self.make_tf(
             parent='camera_depth_optical_frame',
             child='RightShoulder',
-            xyz=self.shoulder_translation,
-            quat=[true_rotation[0], true_rotation[1], true_rotation[2], true_rotation[3]]
+            xyz=avg_translation,
+            quat=[avg_rotation[0], avg_rotation[1], avg_rotation[2], avg_rotation[3]]
         )
         t2 = self.make_tf(
             parent='camera_depth_optical_frame',
             child='gt_RightShoulder',
-            xyz=self.shoulder_translation,
-            quat=[true_rotation[0], true_rotation[1], true_rotation[2], true_rotation[3]]
+            xyz=avg_translation,
+            quat=[avg_rotation[0], avg_rotation[1], avg_rotation[2], avg_rotation[3]]
         )
         t3 = self.make_tf(
             parent='camera_depth_optical_frame',
             child='upt_RightShoulder',
-            xyz=self.shoulder_translation,
-            quat=[true_rotation[0], true_rotation[1], true_rotation[2], true_rotation[3]]
+            xyz=avg_translation,
+            quat=[avg_rotation[0], avg_rotation[1], avg_rotation[2], avg_rotation[3]]
         )
         self.tf_broadcaster.sendTransform([t1, t2, t3])
         return
@@ -340,9 +348,9 @@ class Arm_Solver_Node(Node):
         # self.get_logger().info(f"palm reach length: {np.linalg.norm(w):.2f} m")
         # solve last three degreee of freedom with w and v
         # theta_wrist_x, theta_wrist_y, theta_wrist_z = self.get_3DOF_joint_angles(v, w)
-        prosup, theta_wrist_x, theta_wrist_z = -20.0, -30.0, 0.0
+        prosup, theta_wrist_x, theta_wrist_z = 0.0, 0.0, 0.0
         # Publish the joint states
-        self.publish_joint_states(theta_shoulder_x-7, theta_shoulder_y, theta_shoulder_z, theta_elbow_deg-10, prosup, theta_wrist_x, theta_wrist_z)
+        self.publish_joint_states(theta_shoulder_x, theta_shoulder_y, theta_shoulder_z, theta_elbow_deg, prosup, theta_wrist_x, theta_wrist_z)
 
 
 

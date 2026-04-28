@@ -1,10 +1,16 @@
 ee2hand:
-  translation: [0.00294718, 0.02414458, 0.1025374] #y motion
-  # translation: [-0.0, 0.0, 0.0] # no motion
-  rotation: [-0.5511851645887941, 0.3996510340664562, 0.7312376526605968, -0.04201738495261773] # y motion
+  translation: [0.0,-0.03,0.08] #y motion
+  # x y z w
+  rotation: [0.5, 0.5, -0.5, 0.5]
 
-  # translation: [-0.0192054 , -0.01007333, 0.07440475] #z motion
-  # rotation: [-0.5890074234509467, 0.2732182596988888, 0.7587816627860343, 0.05169551147293741] # z motion
+arm_geometry:
+
+# subject 0
+  upper_arm_length: 0.35
+  forearm_length: 0.26
+
+
+
 
 
 operational:
@@ -38,23 +44,25 @@ sensitivity_analysis:
 
 
 velocity_estimation:
+  use_kalman_filter: true  # Whether to use Kalman Filter for velocity estimation
+  timing:
+    tf_lookup_timeout_sec: 0.05
+    fallback_to_latest_tf: true
   # ===== Core KF (state x = [q, dq]) =====
   kf:
-    q_q: 1.0e-2            # process noise on q   (rad/s)^2 per tick
-    q_dq: 1.0e-2             # process noise on dq  (rad/s^2)^2 per tick
-    q_a: 1.0e-2             # process noise on acceleration (rad/s^3)^2 per tick --- IGNORE ---
+    q_q: 1.0          #  trust in initial joint positions (rad^2 per tick)
+    q_dq: 1.0             # trust in initial joint velocities ((rad/s)^2 per tick)
+    q_a: 1.0e-3             # process noise
+    velocity_decay: 1.0     # s^-1, pulls predicted joint velocity back toward zero
 
-    control_rate_hz: 200.0  # used to set KF dt (fallback if timestamp deltas look bad)
+    control_rate_hz: 250.0  # used to set KF dt (fallback if timestamp deltas look bad)
 
-    sigma_task: 0.5
-    sigma_null: 2.0
-
-    r_sigma_lin: 0.05
-    r_sigma_rot: 0.05
+    r_sigma_lin: 0.01
+    r_sigma_rot: 0.01
     sigma_q: 0.1
-    sigma_dq: 0.3
+    sigma_dq: 0.5
 
-    acc_cap: 10.0  # cap on max acceleration (rad/s^2)
+    acc_cap: 50.0  # cap on max acceleration (rad/s^2)
 
   # ===== Outputs =====
   output:

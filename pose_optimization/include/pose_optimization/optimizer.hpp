@@ -43,6 +43,7 @@ private:
     pinocchio::SE3 T_shoulder_hand, T_shoulder_hand_ref, T_base_hand, T_base_shoulder;
     Eigen::Matrix3d R_diff;
     pinocchio::FrameIndex hand_idx, sh_idx;
+    std::string shoulder_frame_name_, hand_frame_name_;
 
     // ROS 2 interfaces
     tf2_ros::Buffer tf_buffer_;

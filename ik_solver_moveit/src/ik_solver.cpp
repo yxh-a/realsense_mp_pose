@@ -114,6 +114,13 @@ int main(int argc, char **argv)
     Eigen::Isometry3d T_hand_ee = T_ee_hand.inverse();
     RCLCPP_INFO(node->get_logger(), "Hand to EE transform loaded successfully");
 
+    // get joint names 
+    std::vector<std::string> joint_names = joint_model_group->getVariableNames();
+    RCLCPP_INFO(node->get_logger(), "Joint names in the group:");
+    for (const auto& name : joint_names)
+    {
+        RCLCPP_INFO(node->get_logger(), "%s", name.c_str());
+    }
     // get initial joint states from parameters
     std::vector<double> initial_joint_states;
     if (config["initial_joint_states"])
@@ -174,7 +181,7 @@ int main(int argc, char **argv)
         geometry_msgs::msg::TransformStamped transform_stamped;
         try
         {
-            transform_stamped = tf_buffer.lookupTransform("camera_depth_optical_frame", "lbr_link_ee", tf2::TimePointZero);
+            transform_stamped = tf_buffer.lookupTransform("RightShoulder", "lbr_link_ee", tf2::TimePointZero);
         }
         catch (const tf2::TransformException &ex)
         {
@@ -216,7 +223,7 @@ int main(int argc, char **argv)
         // Publish the joint states
         sensor_msgs::msg::JointState joint_state_msg;
         joint_state_msg.header.stamp = transform_stamped.header.stamp;
-        joint_state_msg.name = joint_model_group->getVariableNames();
+        joint_state_msg.name = joint_names;
         joint_state_msg.position = joint_values;
 
         joint_state_pub->publish(joint_state_msg);

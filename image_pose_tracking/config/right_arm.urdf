@@ -110,13 +110,13 @@
         <inertial>
             <mass value="2.181"/>
 			<!--COM origin wrt jRightShoulder-->
-            <origin xyz="0    -0.15           0" rpy="0 0 0" />
+            <origin xyz="0 -0.1495 0" rpy="0 0 0" />
             <inertia ixx="0.020332" iyy="0.0013806" izz="0.020332" ixy="0" ixz="0" iyz="0"/>
         </inertial>
 
         <visual>
 			<!--box origin wrt jRightShoulder. RPY rotated of pi/2.-->
-            <origin xyz="0    -0.15           0" rpy="1.5708 0 0" />
+            <origin xyz="0 -0.1495 0" rpy="1.5708 0 0" />
             <geometry>
                 <cylinder length="0.299" radius="0.02"/>
             </geometry>
@@ -125,7 +125,7 @@
 
         <collision>
 			<!--box origin wrt jRightShoulder. RPY rotated of pi/2.-->
-            <origin xyz="0    -0.15           0" rpy="1.5708 0 0" />
+            <origin xyz="0 -0.1495 0" rpy="1.5708 0 0" />
             <geometry>
                 <cylinder length="0.299" radius="0.02"/>
             </geometry>
@@ -146,13 +146,13 @@
         <inertial>
             <mass value="1.454"/>
 			<!--COM origin wrt jRightElbow-->
-            <origin xyz="0    -0.124           0" rpy="0 0 0" />
+            <origin xyz="0 -0.124 0" rpy="0 0 0" />
             <inertia ixx="0.008948" iyy="0.00040906" izz="0.008948" ixy="0" ixz="0" iyz="0"/>
         </inertial>
 
         <visual>
 			<!--box origin wrt jRightElbow. RPY rotated of pi/2.-->
-            <origin xyz="0    -0.124           0" rpy="1.5708 0 0" />
+            <origin xyz="0 -0.124 0" rpy="1.5708 0 0" />
             <geometry>
                 <cylinder length="0.248" radius="0.02"/>
             </geometry>
@@ -161,7 +161,7 @@
 
         <collision>
 			<!--box origin wrt jRightElbow. RPY rotated of pi/2.-->
-            <origin xyz="0    -0.124           0" rpy="1.5708 0 0" />
+            <origin xyz="0 -0.124 0" rpy="1.5708 0 0" />
             <geometry>
                 <cylinder length="0.248" radius="0.02"/>
             </geometry>

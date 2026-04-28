@@ -50,14 +50,14 @@ private:
 
         void init(int n_, double dtc_, double Pq0 = 1e-2, double Pdq0 = 1e-2);
         void set_state(const Eigen::VectorXd& q0, const Eigen::VectorXd& dq0);
-        void predict(double qa);
+        void predict(double qa, double velocity_decay, double acc_cap, double dt = -1.0);
 
-        void correct(const Eigen::Matrix<double,6,Eigen::Dynamic>& J,
-                    const Eigen::Matrix<double,6,1>& v_meas,
-                    const Eigen::VectorXd& q_meas,
-                    const Eigen::VectorXd& dq_meas,
-                    double r_sigma_lin, double r_sigma_rot,
-                    double sigma_q, double sigma_dq);
+        void correct_task_velocity(const Eigen::Matrix<double,6,Eigen::Dynamic>& J,
+                                   const Eigen::Matrix<double,6,1>& v_meas,
+                                   double r_sigma_lin, double r_sigma_rot);
+        void correct_joint_measurement(const Eigen::VectorXd& q_meas,
+                                       const Eigen::VectorXd& dq_meas,
+                                       double sigma_q, double sigma_dq);
 
         Eigen::VectorXd q()  const;
         Eigen::VectorXd dq() const;
@@ -65,9 +65,9 @@ private:
     
     // Kalman filter parameters
     double q_q_, q_dq_, q_a_;
-    double rate_hz_ = 200.0; // control rate in Hz
-    double sigma_task_ = 0.5; // task measurement noise
-    double sigma_null_ = 2.0; // null-space process noise
+    double rate_hz_ = 250.0; // control rate in Hz
+    double velocity_decay_ = 0.0; // exponential decay toward zero velocity
+    double acc_cap_ = 10.0; // cap on acceleration implied by prediction
     double r_sigma_lin_ = 0.02; // measurement noise
     double r_sigma_rot_ = 0.05; // measurement noise
     double sigma_q_ = 0.01; // vision joint position measurement noise
@@ -76,6 +76,9 @@ private:
     bool print_velocity_ = true; // whether to print joint velocities to console
     bool print_sigmas_ = true; // whether to print measurement and task sigmas to console
     bool first_dq_ = false;
+    bool use_kalman_filter_ = true;
+    bool fallback_to_latest_tf_ = true;
+    double tf_lookup_timeout_sec_ = 0.05;
 
     std::vector<std::string> joint_names_ = {
         "upt_jRightShoulder_rotx",
@@ -105,21 +108,24 @@ private:
     // math utilities
     pinocchio::Model model_, arm_model_;
     pinocchio::Data data_, arm_data_;
-    std::string ee_frame_name_, hand_frame_name_;
+    std::string ee_frame_name_, hand_frame_name_, shoulder_frame_name_;
     pinocchio::FrameIndex ee_frame_id_, hand_frame_id_;
     pinocchio::SE3 T_eehand_, T_handee_, T_worldee_,T_worldhand_,T_shoulderhand_,T_worldshoulder_;
     Eigen::VectorXd q_arm_, dq_arm_, q_, dq_, dq_arm_prev_;
-    Eigen::VectorXd v_hand_, v_ee_, v_ee_in_shoulder_;
+    Eigen::VectorXd v_ee_in_world_, v_hand_in_world_, v_hand_in_shoulder_;
     Eigen::Matrix<double, 6, 6> Ad_T;
 
     // Kalman filter instance and vision dq
     DQKalman kf_;
     Eigen::VectorXd dq_vis_;
     rclcpp::Time last_vis_stamp_;
+    rclcpp::Time last_robot_stamp_;
     bool first_vis_{false};
+    bool first_robot_{false};
+    bool new_vis_measurement_{false};
 
     // TF
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
-    geometry_msgs::msg::TransformStamped tf_shoulder2ee;
+    geometry_msgs::msg::TransformStamped tf_world2shoulder;
 };
