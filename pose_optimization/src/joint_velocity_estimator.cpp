@@ -26,9 +26,9 @@ std::string render_arm_xacro(
     double forearm_length)
 {
     const std::string xacro_path =
-        ament_index_cpp::get_package_share_directory("image_pose_tracking") + "/config/right_arm.urdf.xacro";
+        ament_index_cpp::get_package_share_directory("image_pose_tracking") + "/config/right_arm_osim_shoulder.urdf.xacro";
 
-    char temp_template[] = "/tmp/right_arm_velocity_XXXXXX.urdf";
+    char temp_template[] = "/tmp/right_arm_osim_shoulder_velocity_XXXXXX.urdf";
     const int fd = mkstemps(temp_template, 5);
     if (fd == -1) {
         throw std::runtime_error("Failed to create temporary URDF path");
@@ -45,7 +45,7 @@ std::string render_arm_xacro(
 
     if (std::system(command.c_str()) != 0) {
         std::remove(temp_template);
-        throw std::runtime_error("Failed to render right_arm.urdf.xacro");
+        throw std::runtime_error("Failed to render right_arm_osim_shoulder.urdf.xacro");
     }
 
     return temp_template;
@@ -235,15 +235,38 @@ VelocityEstimator::VelocityEstimator()
     arm_data_ = pinocchio::Data(arm_model_);
     std::remove(human_arm_urdf_path.c_str());
 
+    joint_names_ = {
+        robot_prefix + "jRightShoulder_elv_angle",
+        robot_prefix + "jRightShoulder_shoulder_elv",
+        robot_prefix + "jRightShoulder_shoulder_rot",
+        robot_prefix + "jRightElbow_rotz",
+        robot_prefix + "jRightElbow_roty",
+        robot_prefix + "jRightWrist_rotx",
+        robot_prefix + "jRightWrist_rotz"
+    };
+
+    for (std::size_t i = 0; i < kArmOptDof; ++i) {
+        arm_opt_joint_ids_[i] = arm_model_.getJointId(joint_names_[i]);
+        if (arm_opt_joint_ids_[i] >= static_cast<pinocchio::JointIndex>(arm_model_.njoints)) {
+            throw std::runtime_error("Joint not found in right_arm_osim_shoulder model: " + joint_names_[i]);
+        }
+        arm_opt_joint_multipliers_[i] = 1.0;
+    }
+
+    arm_mimic_joint_id_ = arm_model_.getJointId(robot_prefix + "jRightShoulder_shoulder1_r2");
+    if (arm_mimic_joint_id_ >= static_cast<pinocchio::JointIndex>(arm_model_.njoints)) {
+        throw std::runtime_error("Mimic joint not found in right_arm_osim_shoulder model");
+    }
+
     shoulder_frame_name_ = robot_prefix + "RightShoulder";
     hand_frame_name_ = robot_prefix + "RightHandCOM";
     hand_frame_id_ = arm_model_.getFrameId(hand_frame_name_);
 
-    q_arm_   = Eigen::VectorXd::Zero(arm_model_.nq);
-    dq_arm_  = Eigen::VectorXd::Zero(arm_model_.nv);
-    dq_vis_  = Eigen::VectorXd::Zero(arm_model_.nv);
+    q_arm_   = Eigen::VectorXd::Zero(kArmOptDof);
+    dq_arm_  = Eigen::VectorXd::Zero(kArmOptDof);
+    dq_vis_  = Eigen::VectorXd::Zero(kArmOptDof);
 
-    pinocchio::framesForwardKinematics(arm_model_, arm_data_, q_arm_);
+    pinocchio::framesForwardKinematics(arm_model_, arm_data_, armModelConfigurationFromOpt(q_arm_));
 
     arm_joint_sub_ = this->create_subscription<sensor_msgs::msg::JointState>(
       "/optimized_arm/joint_states", 10,
@@ -333,7 +356,7 @@ VelocityEstimator::VelocityEstimator()
     print_sigmas_   = config["velocity_estimation"]["output"]["print_sigmas"].as<bool>(true);
     }
 
-    kf_.init(model_.nv, 1.0 / rate_hz_, q_q_, q_dq_);
+    kf_.init(kArmOptDof, 1.0 / rate_hz_, q_q_, q_dq_);
 
 
     // --- Shared initial state
@@ -349,6 +372,40 @@ VelocityEstimator::VelocityEstimator()
     // --- TF listener
     tf_buffer_   = std::make_shared<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+}
+
+Eigen::VectorXd VelocityEstimator::armModelConfigurationFromOpt(const double* values) const
+{
+    Eigen::VectorXd q_model = Eigen::VectorXd::Zero(arm_model_.nq);
+    for (std::size_t i = 0; i < kArmOptDof; ++i) {
+        q_model[arm_model_.idx_qs[arm_opt_joint_ids_[i]]] = arm_opt_joint_multipliers_[i] * values[i];
+    }
+    q_model[arm_model_.idx_qs[arm_mimic_joint_id_]] = arm_mimic_joint_multiplier_ * values[0];
+    return q_model;
+}
+
+Eigen::VectorXd VelocityEstimator::armModelConfigurationFromOpt(const Eigen::VectorXd& values) const
+{
+    if (values.size() < static_cast<Eigen::Index>(kArmOptDof)) {
+        throw std::runtime_error("Not enough independent joint values for right_arm_osim_shoulder model");
+    }
+    return armModelConfigurationFromOpt(values.data());
+}
+
+Eigen::Matrix<double, 6, Eigen::Dynamic> VelocityEstimator::independentArmJacobian(
+    const Eigen::Matrix<double, 6, Eigen::Dynamic>& full_jacobian) const
+{
+    Eigen::Matrix<double, 6, Eigen::Dynamic> reduced_jacobian(6, kArmOptDof);
+    reduced_jacobian.setZero();
+
+    for (std::size_t i = 0; i < kArmOptDof; ++i) {
+        reduced_jacobian.col(i) =
+            arm_opt_joint_multipliers_[i] * full_jacobian.col(arm_model_.idx_vs[arm_opt_joint_ids_[i]]);
+    }
+    reduced_jacobian.col(0) +=
+        arm_mimic_joint_multiplier_ * full_jacobian.col(arm_model_.idx_vs[arm_mimic_joint_id_]);
+
+    return reduced_jacobian;
 }
 
 void VelocityEstimator::jointCallback(const sensor_msgs::msg::JointState::SharedPtr msg)
@@ -456,16 +513,18 @@ void VelocityEstimator::jointCallback(const sensor_msgs::msg::JointState::Shared
         RCLCPP_ERROR(this->get_logger(), "q_for_jacobian contains non-finite values");
         return;
     }
+    const Eigen::VectorXd q_model_for_jacobian = armModelConfigurationFromOpt(q_for_jacobian);
 
     // Arm Jacobian. For KF mode, evaluate at the filter state, not the latest measurement.
-    pinocchio::computeJointJacobians(arm_model_, arm_data_, q_for_jacobian);
-    pinocchio::framesForwardKinematics(arm_model_, arm_data_, q_for_jacobian);
+    pinocchio::computeJointJacobians(arm_model_, arm_data_, q_model_for_jacobian);
+    pinocchio::framesForwardKinematics(arm_model_, arm_data_, q_model_for_jacobian);
     pinocchio::updateFramePlacements(arm_model_, arm_data_);
 
-    Eigen::Matrix<double, 6, Eigen::Dynamic> J_arm(6, arm_model_.nv);
-    J_arm.setZero();
-    J_arm = pinocchio::getFrameJacobian(
+    Eigen::Matrix<double, 6, Eigen::Dynamic> J_arm_full(6, arm_model_.nv);
+    J_arm_full.setZero();
+    J_arm_full = pinocchio::getFrameJacobian(
         arm_model_, arm_data_, hand_frame_id_, pinocchio::LOCAL_WORLD_ALIGNED);
+    const Eigen::Matrix<double, 6, Eigen::Dynamic> J_arm = independentArmJacobian(J_arm_full);
     if (!isValidMatrix(J_arm)) {
         RCLCPP_ERROR(this->get_logger(), "Invalid arm Jacobian (NaNs detected)");
         return;
@@ -551,16 +610,16 @@ void VelocityEstimator::jointCallback(const sensor_msgs::msg::JointState::Shared
 
 void VelocityEstimator::jointCallback_arm(const sensor_msgs::msg::JointState::SharedPtr msg)
 {
-    if (msg->name.size() != static_cast<size_t>(arm_model_.nq) ||
-        msg->position.size() != static_cast<size_t>(arm_model_.nq) ||
-        msg->velocity.size() != static_cast<size_t>(arm_model_.nv))
+    if (msg->name.size() != kArmOptDof ||
+        msg->position.size() != kArmOptDof ||
+        msg->velocity.size() != kArmOptDof)
     {
         RCLCPP_WARN(this->get_logger(), "Arm joint state size mismatch with model.");
         return;
     }
 
-    q_arm_  = Eigen::VectorXd::Map(msg->position.data(), arm_model_.nq);
-    dq_vis_ = Eigen::VectorXd::Map(msg->velocity.data(), arm_model_.nv);
+    q_arm_  = Eigen::VectorXd::Map(msg->position.data(), kArmOptDof);
+    dq_vis_ = Eigen::VectorXd::Map(msg->velocity.data(), kArmOptDof);
     if (!q_arm_.allFinite() || !dq_vis_.allFinite()) {
         RCLCPP_ERROR(this->get_logger(),
                      "Received non-finite arm measurement. q_finite=%d dq_finite=%d",
@@ -571,7 +630,7 @@ void VelocityEstimator::jointCallback_arm(const sensor_msgs::msg::JointState::Sh
     t_vis_  = last_vis_stamp_.seconds();
     new_vis_measurement_ = true;
 
-    pinocchio::forwardKinematics(arm_model_, arm_data_, q_arm_);
+    pinocchio::forwardKinematics(arm_model_, arm_data_, armModelConfigurationFromOpt(q_arm_));
     pinocchio::updateFramePlacements(arm_model_, arm_data_);
 
     if (!first_vis_) {

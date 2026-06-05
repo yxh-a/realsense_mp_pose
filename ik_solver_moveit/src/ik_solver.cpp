@@ -15,6 +15,11 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include <array>
+#include <cstdio>
+#include <cstdlib>
+#include <sys/wait.h>
+
 using namespace std;
 
 std::string loadFile(const std::string& path)
@@ -25,16 +30,92 @@ std::string loadFile(const std::string& path)
     return std::string((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
 }
 
+std::string shellQuote(const std::string& value)
+{
+    std::string quoted = "'";
+    for (const char c : value)
+    {
+        if (c == '\'')
+        {
+            quoted += "'\\''";
+        }
+        else
+        {
+            quoted += c;
+        }
+    }
+    quoted += "'";
+    return quoted;
+}
+
+std::string runCommand(const std::string& command)
+{
+    std::array<char, 4096> buffer{};
+    std::string output;
+
+    FILE* pipe = popen(command.c_str(), "r");
+    if (!pipe)
+    {
+        throw std::runtime_error("Failed to run command: " + command);
+    }
+
+    while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr)
+    {
+        output += buffer.data();
+    }
+
+    const int status = pclose(pipe);
+    if (status == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0)
+    {
+        throw std::runtime_error("Command failed: " + command);
+    }
+
+    return output;
+}
+
+std::string renderRightArmXacro(
+    const std::string& robot_prefix,
+    const std::string& robot_color,
+    double upper_arm_length,
+    double forearm_length)
+{
+    const std::string xacro_path =
+        ament_index_cpp::get_package_share_directory("image_pose_tracking") + "/config/right_arm.urdf.xacro";
+
+    const std::string command =
+        "xacro " + shellQuote(xacro_path) +
+        " robot_prefix:=" + shellQuote(robot_prefix) +
+        " robot_color:=" + shellQuote(robot_color) +
+        " upper_arm_length:=" + std::to_string(upper_arm_length) +
+        " forearm_length:=" + std::to_string(forearm_length);
+
+    return runCommand(command);
+}
+
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
     auto node = rclcpp::Node::make_shared("ik_solver_node");
 
-    // === Load URDF and SRDF from file ===
-    std::string urdf_path = ament_index_cpp::get_package_share_directory("image_pose_tracking") + "/config/right_arm.urdf";
+    node->declare_parameter<std::string>("robot_prefix", "");
+    node->declare_parameter<std::string>("robot_color", "blue");
+    node->declare_parameter<double>("upper_arm_length", 0.299);
+    node->declare_parameter<double>("forearm_length", 0.248);
+
+    const auto robot_prefix = node->get_parameter("robot_prefix").as_string();
+    const auto robot_color = node->get_parameter("robot_color").as_string();
+    const auto upper_arm_length = node->get_parameter("upper_arm_length").as_double();
+    const auto forearm_length = node->get_parameter("forearm_length").as_double();
+
+    // === Load URDF and SRDF ===
     std::string srdf_path = ament_index_cpp::get_package_share_directory("arm_moveit_config") + "/config/upper_arm.srdf";
-    std::string urdf_string = loadFile(urdf_path);
+    std::string urdf_string = renderRightArmXacro(robot_prefix, robot_color, upper_arm_length, forearm_length);
     std::string srdf_string = loadFile(srdf_path);
+
+    RCLCPP_INFO(
+        node->get_logger(),
+        "Rendered right_arm.urdf.xacro with prefix='%s', color='%s', upper_arm_length=%.3f, forearm_length=%.3f",
+        robot_prefix.c_str(), robot_color.c_str(), upper_arm_length, forearm_length);
 
     // === Load the robot model ===
     // auto urdf_model = urdf::parseURDF(urdf_string);
@@ -42,8 +123,8 @@ int main(int argc, char **argv)
     // srdf_model->initString(*urdf_model, srdf_string);
 
     // auto robot_model = std::make_shared<moveit::core::RobotModel>(urdf_model, srdf_model);
-    node->declare_parameter("robot_description", urdf_string);
-    node->declare_parameter("robot_description_semantic", srdf_string);
+    urdf_string = node->declare_parameter<std::string>("robot_description", urdf_string);
+    srdf_string = node->declare_parameter<std::string>("robot_description_semantic", srdf_string);
     
     // load solver
     // Parse manually
@@ -83,7 +164,7 @@ int main(int argc, char **argv)
     YAML::Node config = YAML::LoadFile(config_path);
     if (!config["ee2hand"])
     {
-        RCLCPP_ERROR(node->get_logger(), "ee2hand configuration not found in %s", config_path);
+        RCLCPP_ERROR(node->get_logger(), "ee2hand configuration not found in %s", config_path.c_str());
         return 0;
     }
     Eigen::Vector3d translation = Eigen::Vector3d::Zero();
@@ -111,7 +192,6 @@ int main(int argc, char **argv)
     Eigen::Quaterniond q (rotation[3], rotation[0], rotation[1], rotation[2]);
     Eigen::Matrix3d R = q.toRotationMatrix();
     T_ee_hand.linear() = R;
-    Eigen::Isometry3d T_hand_ee = T_ee_hand.inverse();
     RCLCPP_INFO(node->get_logger(), "Hand to EE transform loaded successfully");
 
     // get joint names 
@@ -133,11 +213,11 @@ int main(int argc, char **argv)
                     initial_joint_states[0], initial_joint_states[1], initial_joint_states[2],
                     initial_joint_states[3], initial_joint_states[4], initial_joint_states[5],
                     initial_joint_states[6]);
-        RCLCPP_INFO(node->get_logger(), "Joint number in the group: %zu", joint_model_group->getVariableCount());
+        RCLCPP_INFO(node->get_logger(), "Joint number in the group: %u", joint_model_group->getVariableCount());
     }
     else
     {
-        RCLCPP_ERROR(node->get_logger(), "initial_joint_states configuration not found in %s", config_path);
+        RCLCPP_ERROR(node->get_logger(), "initial_joint_states configuration not found in %s", config_path.c_str());
         return 0;
     }   
     std::vector<double> joint_values(joint_model_group->getVariableCount(), 0.0);

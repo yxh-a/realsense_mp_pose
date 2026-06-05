@@ -6,11 +6,18 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image, CameraInfo, JointState
 from std_msgs.msg import Int16MultiArray
 from cv_bridge import CvBridge
-import mediapipe as mp
 
 class MediaPipePoseNode(Node):
     def __init__(self):
         super().__init__('mediapipe_pose_node')
+
+        try:
+            import mediapipe as mp
+        except ImportError as exc:
+            raise RuntimeError(
+                "The keypoint_extraction node requires the optional Python package "
+                "'mediapipe'. Install it in the Python environment used to run this node."
+            ) from exc
 
         # Params
         self.declare_parameter('rgb_topic', '/camera/camera/color/image_raw')

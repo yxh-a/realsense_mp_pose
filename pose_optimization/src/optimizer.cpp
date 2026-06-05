@@ -24,9 +24,9 @@ std::string render_arm_xacro(
     double forearm_length)
 {
     const std::string xacro_path =
-        ament_index_cpp::get_package_share_directory("image_pose_tracking") + "/config/right_arm.urdf.xacro";
+        ament_index_cpp::get_package_share_directory("image_pose_tracking") + "/config/right_arm_osim_shoulder.urdf.xacro";
 
-    char temp_template[] = "/tmp/right_arm_optimizer_XXXXXX.urdf";
+    char temp_template[] = "/tmp/right_arm_osim_shoulder_optimizer_XXXXXX.urdf";
     const int fd = mkstemps(temp_template, 5);
     if (fd == -1) {
         throw std::runtime_error("Failed to create temporary URDF path");
@@ -43,7 +43,7 @@ std::string render_arm_xacro(
 
     if (std::system(command.c_str()) != 0) {
         std::remove(temp_template);
-        throw std::runtime_error("Failed to render right_arm.urdf.xacro");
+        throw std::runtime_error("Failed to render right_arm_osim_shoulder.urdf.xacro");
     }
 
     return temp_template;
@@ -76,9 +76,28 @@ PoseOptimizer::PoseOptimizer()
     pinocchio::urdf::buildModel(urdf_path, model_);
     data_ = pinocchio::Data(model_);
 
-    joint_names_.reserve(model_.nq);
-    for (int i = 1; i < model_.njoints; ++i)  // start from 1 to skip universe joint
-        joint_names_.push_back(model_.names[i]);
+    joint_names_ = {
+        robot_prefix + "jRightShoulder_elv_angle",
+        robot_prefix + "jRightShoulder_shoulder_elv",
+        robot_prefix + "jRightShoulder_shoulder_rot",
+        robot_prefix + "jRightElbow_rotz",
+        robot_prefix + "jRightElbow_roty",
+        robot_prefix + "jRightWrist_rotx",
+        robot_prefix + "jRightWrist_rotz"
+    };
+
+    for (std::size_t i = 0; i < kOptDof; ++i) {
+        opt_joint_ids_[i] = model_.getJointId(joint_names_[i]);
+        if (opt_joint_ids_[i] >= static_cast<pinocchio::JointIndex>(model_.njoints)) {
+            throw std::runtime_error("Joint not found in right_arm_osim_shoulder model: " + joint_names_[i]);
+        }
+        opt_joint_multipliers_[i] = 1.0;
+    }
+
+    mimic_joint_id_ = model_.getJointId(robot_prefix + "jRightShoulder_shoulder1_r2");
+    if (mimic_joint_id_ >= static_cast<pinocchio::JointIndex>(model_.njoints)) {
+        throw std::runtime_error("Mimic joint not found in right_arm_osim_shoulder model");
+    }
 
 
     q = Eigen::VectorXd::Zero(model_.nq);
@@ -106,7 +125,7 @@ PoseOptimizer::PoseOptimizer()
     YAML::Node config = YAML::LoadFile(config_path);
     if (!config["ee2hand"])
     {
-        RCLCPP_ERROR(this->get_logger(), "ee2hand configuration not found in %s", config_path);
+        RCLCPP_ERROR(this->get_logger(), "ee2hand configuration not found in %s", config_path.c_str());
         return;
     }
     Eigen::Vector3d translation = Eigen::Vector3d::Zero();
@@ -129,21 +148,15 @@ PoseOptimizer::PoseOptimizer()
         );
     }
 
-    if (config["operational"]["method"])
-    {
-        method_ = config["operational"]["method"].as<std::string>();
-        RCLCPP_INFO(this->get_logger(), "Optimization method: %s", method_.c_str());
+    if (config["operational"]) {
+        enable_optimization_ = config["operational"]["enable_optimization"].as<bool>(true);
         print_error_before_loop = config["operational"]["print_error_before_loop"].as<bool>(false);
         print_error_after_loop = config["operational"]["print_error_after_loop"].as<bool>(false);
-        print_error_in_loop = config["operational"]["print_error_in_loop"].as<bool>(false);
         print_joint_angles = config["operational"]["print_joint_angles"].as<bool>(false);
         print_critical_transforms = config["operational"]["print_critical_transforms"].as<bool>(false);
     }
-    else
-    {
-        RCLCPP_WARN(this->get_logger(), "No optimization method specified, using default SVD");
-        method_ = "NLopt";  // Default to NLopt if not specified
-    }
+    RCLCPP_INFO(this->get_logger(), "NLopt optimization enabled: %s", enable_optimization_ ? "true" : "false");
+
     if (config["sensitivity_analysis"])
     {
         apply_sensitivity = config["sensitivity_analysis"]["apply_sensitivity"].as<bool>(false);
@@ -157,41 +170,37 @@ PoseOptimizer::PoseOptimizer()
         sigma = 0.0;
     }
 
-    if (method_ == "NLopt")
+    RCLCPP_INFO(this->get_logger(), "Using NLopt for optimization");
+    max_iterations = config["NLopt"]["max_iterations"].as<int>(100);
+    algorithm = config["NLopt"]["algorithm"].as<std::string>("LN_COBYLA");
+    tolerance = config["NLopt"]["tolerance"].as<double>(1e-4);
+    pos_weight = config["NLopt"]["pos_weight"].as<double>(10.0);
+    rot_weight = config["NLopt"]["rot_weight"].as<double>(1.0);
+    joint_weights = config["NLopt"]["joint_weights"].as<std::vector<double>>();
+    w_vel_ = config["NLopt"]["velocity_weight"].as<double>(5.0);
+    w_acc_ = config["NLopt"]["acceleration_weight"].as<double>(1.0);
+    // normalize joint weights to have a sum of 1
+    double sum_weights = std::accumulate(joint_weights.begin(), joint_weights.end(), 0.0);
+    if (sum_weights > 0)
     {
-        RCLCPP_INFO(this->get_logger(), "Using NLopt for optimization");
-        max_iterations = config["NLopt"]["max_iterations"].as<int>(100);
-        algorithm = config["NLopt"]["algorithm"].as<std::string>("LN_COBYLA");
-        tolerance = config["NLopt"]["tolerance"].as<double>(1e-4);
-        pos_weight = config["NLopt"]["pos_weight"].as<double>(10.0);
-        rot_weight = config["NLopt"]["rot_weight"].as<double>(1.0);
-        joint_weights = config["NLopt"]["joint_weights"].as<std::vector<double>>();
-        w_vel_ = config["NLopt"]["velocity_weight"].as<double>(5.0);
-        w_acc_ = config["NLopt"]["acceleration_weight"].as<double>(1.0);
-        // normalize joint weights to have a sum of 1
-        double sum_weights = std::accumulate(joint_weights.begin(), joint_weights.end(), 0.0);
-        if (sum_weights > 0)
-        {
-            for (auto &weight : joint_weights)
-                weight /= sum_weights;
-        }
-        joint_penalty_weight = config["NLopt"]["joint_penalty_weight"].as<double>(1.0);
-        RCLCPP_INFO(this->get_logger(), "NLopt parameters: max_iterations=%d, algorithm=%s, tolerance=%.6f",
-            max_iterations, algorithm.c_str(), tolerance);
-
-        opt_ = nlopt_create(nlopt_algorithm_from_string(algorithm.c_str()), 7);
-        std::vector<double> lb = { -2.35619, -0.785398, -1.5708, 0, -0.872665, -0.523599, -0.523599 };
-        std::vector<double> ub = {  1.5708,   3.14159,   1.5708, 2.53073, 1.0472, 0.349066, 0.349066 };
-        nlopt_set_lower_bounds(opt_, lb.data());
-        nlopt_set_upper_bounds(opt_, ub.data());
-        nlopt_set_min_objective(opt_, PoseOptimizer::costFunction, this);
-        nlopt_set_xtol_rel(opt_, tolerance);
-        nlopt_set_maxeval(opt_, max_iterations);
-
-        RCLCPP_INFO(this->get_logger(), "NLopt optimization initialized.");
-
+        for (auto &weight : joint_weights)
+            weight /= sum_weights;
     }
-    // getting method from the yaml
+    joint_penalty_weight = config["NLopt"]["joint_penalty_weight"].as<double>(1.0);
+    RCLCPP_INFO(this->get_logger(), "NLopt parameters: max_iterations=%d, algorithm=%s, tolerance=%.6f",
+        max_iterations, algorithm.c_str(), tolerance);
+
+    opt_ = nlopt_create(nlopt_algorithm_from_string(algorithm.c_str()), kOptDof);
+    std::vector<double> lb = { -1.65806279, 0.0, -1.57079633, 0.0, -1.5708, -1.5708, -0.723599 };
+    std::vector<double> ub = {  2.26892803, 3.14159265, 2.09439510, 2.53073, 1.48353, 1.5708, 0.549066 };
+    nlopt_set_lower_bounds(opt_, lb.data());
+    nlopt_set_upper_bounds(opt_, ub.data());
+    nlopt_set_min_objective(opt_, PoseOptimizer::costFunction, this);
+    nlopt_set_xtol_rel(opt_, tolerance);
+    nlopt_set_maxeval(opt_, max_iterations);
+
+    RCLCPP_INFO(this->get_logger(), "NLopt optimization initialized.");
+
     ee_to_hand_ = Eigen::Isometry3d::Identity();
     Eigen::Quaterniond q (rotation[3], rotation[0], rotation[1], rotation[2]);
     Eigen::Matrix3d R = q.toRotationMatrix();
@@ -224,7 +233,7 @@ PoseOptimizer::PoseOptimizer()
 
     //intialize a window for velocity smoothing
     int window_size_ = 5;
-    dq_window_.resize(window_size_, std::vector<double>(7, 0.0));
+    dq_window_.resize(window_size_, std::vector<double>(kOptDof, 0.0));
 
     noise = Eigen::Vector3d::Zero();
     R_noise = Eigen::Matrix3d::Zero();
@@ -233,18 +242,33 @@ PoseOptimizer::PoseOptimizer()
 
 }
 
+Eigen::VectorXd PoseOptimizer::modelConfigurationFromOpt(const double* values) const
+{
+    Eigen::VectorXd q_model = Eigen::VectorXd::Zero(model_.nq);
+    for (std::size_t i = 0; i < kOptDof; ++i) {
+        q_model[model_.idx_qs[opt_joint_ids_[i]]] = opt_joint_multipliers_[i] * values[i];
+    }
+    q_model[model_.idx_qs[mimic_joint_id_]] = mimic_joint_multiplier_ * values[0];
+    return q_model;
+}
 
+Eigen::VectorXd PoseOptimizer::modelConfigurationFromOpt(const std::vector<double>& values) const
+{
+    if (values.size() < kOptDof) {
+        throw std::runtime_error("Not enough independent joint values for right_arm_osim_shoulder model");
+    }
+    return modelConfigurationFromOpt(values.data());
+}
 
 double PoseOptimizer::costFunction(unsigned n, const double* x, double* grad, void* data) {
     auto* self = reinterpret_cast<PoseOptimizer*>(data);
+    (void)n;
+    (void)grad;
 
-    // Convert x to Eigen vector
-    Eigen::VectorXd q(7);
-    for (size_t i = 0; i < 7; ++i)
-        q[i] = x[i];
+    Eigen::VectorXd q_model = self->modelConfigurationFromOpt(x);
 
     // FK
-    pinocchio::forwardKinematics(self->model_, self->data_, q);
+    pinocchio::forwardKinematics(self->model_, self->data_, q_model);
     pinocchio::updateFramePlacements(self->model_, self->data_);
 
 
@@ -261,23 +285,26 @@ double PoseOptimizer::costFunction(unsigned n, const double* x, double* grad, vo
     double pose_cost = error_twist.linear().squaredNorm() * self->pos_weight +
                        error_twist.angular().squaredNorm() * self->rot_weight;
 
-    // calculate joint cost to hold first 7 joints
+    // calculate joint cost to hold independent joints
     double joint_cost = 0.0;
-    for (size_t i = 0; i < 7; ++i) {
-        joint_cost += self->joint_weights[i] * std::pow(q[i] - self->q_init_[i], 2);
+    for (std::size_t i = 0; i < kOptDof; ++i) {
+        const int q_idx = self->model_.idx_qs[self->opt_joint_ids_[i]];
+        joint_cost += self->joint_weights[i] * std::pow(q_model[q_idx] - self->q_init_[q_idx], 2);
 
     }
 
     // soft constraint on smooth movement
     double smooth_cost = 0.0;
     if (self->have_prev_) {
-        for (int i = 0; i < 7; ++i) {
-            double dv = q[i] - self->q_prev_[i];
+        for (std::size_t i = 0; i < kOptDof; ++i) {
+            const int q_idx = self->model_.idx_qs[self->opt_joint_ids_[i]];
+            double dv = q_model[q_idx] - self->q_prev_[q_idx];
             smooth_cost += self->w_vel_ * dv * dv;
         }
         if (self->have_prev2_) {
-            for (int i = 0; i < 7; ++i) {
-                double da = q[i] - 2.0*self->q_prev_[i] + self->q_prev2_[i];
+            for (std::size_t i = 0; i < kOptDof; ++i) {
+                const int q_idx = self->model_.idx_qs[self->opt_joint_ids_[i]];
+                double da = q_model[q_idx] - 2.0*self->q_prev_[q_idx] + self->q_prev2_[q_idx];
                 smooth_cost += self->w_acc_ * da * da;
             }
         }
@@ -287,28 +314,74 @@ double PoseOptimizer::costFunction(unsigned n, const double* x, double* grad, vo
     return pose_cost + self->joint_penalty_weight * joint_cost + smooth_cost;
 }
 
+void PoseOptimizer::publishJointState(const Eigen::VectorXd& q_current)
+{
+    sensor_msgs::msg::JointState optimized_joint_state;
+    optimized_joint_state.header.stamp = this->get_clock()->now();
+    optimized_joint_state.name = opt_joint_names_;
+    optimized_joint_state.position.resize(kOptDof);
+    for (std::size_t i = 0; i < kOptDof; ++i)
+    {
+        const int q_idx = model_.idx_qs[opt_joint_ids_[i]];
+        if (!std::isfinite(q_current[q_idx])) {
+            RCLCPP_ERROR(this->get_logger(), "Non-finite value in joint %s: %f", opt_joint_names_[i].c_str(), q_current[q_idx]);
+            return;
+        }
+        optimized_joint_state.position[i] = q_current[q_idx];
+    }
+
+    optimized_joint_state.velocity.resize(kOptDof, 0.0);
+    if (have_prev_) {
+        double dt = (this->now() - last_update_time_).seconds();
+        for (std::size_t i = 0; i < kOptDof; ++i) {
+            const int q_idx = model_.idx_qs[opt_joint_ids_[i]];
+            optimized_joint_state.velocity[i] = dt > 0.0 ? (q_current[q_idx] - q_prev_[q_idx]) / dt : 0.0;
+        }
+    }
+    last_update_time_ = this->now();
+
+    joint_state_publisher_->publish(optimized_joint_state);
+
+    if (have_prev_) {
+        q_prev2_ = q_prev_;
+        have_prev2_ = true;
+    }
+    q_prev_ = q_current;
+    have_prev_ = true;
+}
+
 
 void PoseOptimizer::joint_state_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg)
 {   
-    // update the robot state based on the received joint states
 
-    if (msg->data.size() != static_cast<std::size_t>(model_.nq))
+    // update the robot state based on the received joint states
+    // if (msg->data.size() != static_cast<std::size_t>(model_.nq))
+    // {
+    //     RCLCPP_ERROR(this->get_logger(), "Received joint states size (%zu) does not match model DOF (%d)", msg->data.size(), model_.nq);
+    //     return;
+    // }
+
+    if (msg->data.size() < kOptDof)
     {
-        RCLCPP_ERROR(this->get_logger(), "Received joint states size (%zu) does not match model DOF (%d)", msg->data.size(), model_.nq);
+        RCLCPP_ERROR(this->get_logger(), "Received joint states size (%zu) is smaller than optimizer DOF (%zu)", msg->data.size(), kOptDof);
         return;
     }
-    
-    q = Eigen::VectorXd::Zero(model_.nq);
-    for (size_t i = 0; i < joint_names_.size(); ++i)
-    {
-        q[i] = msg->data[i];
+
+    // The solver appends points_too_close after the 7 independent OSIM joints.
+    if (msg->data.size() > kOptDof && msg->data.back() > 0.5) {
+        RCLCPP_WARN(this->get_logger(), "Received joint states with points_too_close flag set, skipping optimization for this frame.");
+        return;
     }
+
+    std::vector<double> measured_joints(msg->data.begin(), msg->data.begin() + kOptDof);
+    q = modelConfigurationFromOpt(measured_joints);
 
     q_init_ = q; // Store initial joint angles
 
     pinocchio::forwardKinematics(model_, data_, q);
     pinocchio::updateFramePlacements(model_, data_);
 
+    
 
     geometry_msgs::msg::TransformStamped tf;
     try
@@ -417,92 +490,46 @@ void PoseOptimizer::joint_state_callback(const std_msgs::msg::Float32MultiArray:
     tf_broadcaster_->sendTransform(gt_transform);
 
 
+    if (!enable_optimization_) {
+            publishJointState(q);
+            return;
+        }
+
+
     //correct the shoulder to hand transform using the error
     if (print_error_before_loop)
     {
         RCLCPP_INFO(this->get_logger(), "Initial error norm: %.6f", error_twist.toVector().norm());
     }
 
-    if (method_ == "NLopt")
+    double minf;
+    std::vector<double> x(kOptDof);
+    for (std::size_t i = 0; i < kOptDof; ++i)
     {
-        double minf;
-        std::vector<double> x(7);
-        for (int i = 0; i < 7; ++i)
-        {
-            x[i] = q[i]; // initialize with current joint angles
-        }
-        nlopt_result result = nlopt_optimize(opt_, x.data(), &minf);
-        if (print_error_after_loop)
-        {
-            RCLCPP_INFO(this->get_logger(), "NLopt result = %d, final cost = %.6f", result, minf);
-            RCLCPP_INFO(this->get_logger(), "Converged after %d iterations", nlopt_get_numevals(opt_));
-        }
-
-        if (print_joint_angles)
-        {
-            RCLCPP_INFO(this->get_logger(), "Initial joint angles: %f, %f, %f, %f, %f, %f, %f",
-                q[0], q[1], q[2], q[3], q[4], q[5], q[6]);
-        }
-        for (int i = 0; i < 7; ++i)
-        {
-            if (!std::isfinite(x[i]))
-            {
-                RCLCPP_ERROR(this->get_logger(), "Non-finite value in optimized joint %d: %f", i, x[i]);
-                return;
-            }
-            q[i] = x[i];
-        }
+        x[i] = q[model_.idx_qs[opt_joint_ids_[i]]]; // initialize with current independent joint angles
     }
-    // publish the optimized joint states
-    sensor_msgs::msg::JointState optimized_joint_state;
-    optimized_joint_state.header.stamp = this->get_clock()->now();
-    optimized_joint_state.name = opt_joint_names_;
-    optimized_joint_state.position.resize(model_.nq);
-    for (size_t i = 0; i < model_.nq; ++i)
-    {   
-        if (!std::isfinite(q[i])) {
-            RCLCPP_ERROR(this->get_logger(), "Non-finite value in joint %s: %f", opt_joint_names_[i].c_str(), q[i]);
+    nlopt_result result = nlopt_optimize(opt_, x.data(), &minf);
+    if (print_error_after_loop)
+    {
+        RCLCPP_INFO(this->get_logger(), "NLopt result = %d, final cost = %.6f", result, minf);
+        RCLCPP_INFO(this->get_logger(), "Converged after %d iterations", nlopt_get_numevals(opt_));
+    }
+
+    if (print_joint_angles)
+    {
+        RCLCPP_INFO(this->get_logger(), "Optimized joint angles: %f, %f, %f, %f, %f, %f, %f",
+            x[0], x[1], x[2], x[3], x[4], x[5], x[6]);
+    }
+    for (std::size_t i = 0; i < kOptDof; ++i)
+    {
+        if (!std::isfinite(x[i]))
+        {
+            RCLCPP_ERROR(this->get_logger(), "Non-finite value in optimized joint %zu: %f", i, x[i]);
             return;
         }
-        optimized_joint_state.position[i] = q[i];
     }
-
-    optimized_joint_state.velocity.resize(model_.nq, 0.0); // Set velocities to zero
-    // calculate the velocity of each joint bbased on q and q_prev_
-    if (have_prev_) {
-        double dt = (this->now() - last_update_time_).seconds();
-        for (size_t i = 0; i < model_.nq; ++i) {
-            // if (dt > 0){
-            //     double raw_dq = (q[i] - q_prev_[i]) / dt;
-            //     // add the new velocity to the window
-            //     dq_window_.erase(dq_window_.begin());
-            //     dq_window_.push_back(std::vector<double>(7, 0.0));
-            //     dq_window_.back()[i] = raw_dq;
-            //     // calculate the smoothed velocity
-            //     double smoothed_dq = 0.0;
-            //     for (const auto& vel_vec : dq_window_) {
-            //         smoothed_dq += vel_vec[i];
-            //     }
-            //     smoothed_dq /= dq_window_.size();
-            //     optimized_joint_state.velocity[i] = smoothed_dq;
-            // }
-            // else {
-            //     optimized_joint_state.velocity[i] = 0.0;
-            // }
-            optimized_joint_state.velocity[i] = (q[i] - q_prev_[i]) / dt;
-        }
-    }
-    last_update_time_ = this->now(); // Update the last update time
-
-    joint_state_publisher_->publish(optimized_joint_state);
-
-    // update previous joint states
-    if (have_prev_) {
-        q_prev2_ = q_prev_;
-        have_prev2_ = true;
-    }
-    q_prev_ = q;
-    have_prev_ = true;
+    q = modelConfigurationFromOpt(x);
+    publishJointState(q);
 
 }
 int main(int argc, char** argv)

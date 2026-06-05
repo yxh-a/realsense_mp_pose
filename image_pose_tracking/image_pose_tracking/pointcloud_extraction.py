@@ -112,9 +112,12 @@ class PointCloudExtractionNode(Node):
         if len(cloud_array) < 1:
             return None
         
-        cloud_point = cloud_array[0]  # Take the first valid point
+        cloud_point = np.mean(
+            np.array([[point[0], point[1], point[2]] for point in cloud_array], dtype=float),
+            axis=0
+        )
         true_point = Point()
-        true_point.x = cloud_point[0]+0.05 
+        true_point.x = cloud_point[0]
         true_point.y = cloud_point[1]
         true_point.z = cloud_point[2] + self.joint_center_depth_offset  # Adjust depth with offset
         return true_point

@@ -20,6 +20,7 @@
 #include <Eigen/SVD>
 #include <Eigen/Geometry>
 #include <yaml-cpp/yaml.h>
+#include <array>
 #include <chrono>
 
 using namespace std::chrono_literals;
@@ -31,8 +32,14 @@ public:
     VelocityEstimator();
 
 private:
+    static constexpr std::size_t kArmOptDof = 7;
+
     void jointCallback(const sensor_msgs::msg::JointState::SharedPtr msg);
     void jointCallback_arm(const sensor_msgs::msg::JointState::SharedPtr msg);
+    Eigen::VectorXd armModelConfigurationFromOpt(const double* values) const;
+    Eigen::VectorXd armModelConfigurationFromOpt(const Eigen::VectorXd& values) const;
+    Eigen::Matrix<double, 6, Eigen::Dynamic> independentArmJacobian(
+        const Eigen::Matrix<double, 6, Eigen::Dynamic>& full_jacobian) const;
 
     bool isValidTransform(const pinocchio::SE3 &T);
     bool isValidMatrix(const Eigen::MatrixXd &M);
@@ -81,9 +88,9 @@ private:
     double tf_lookup_timeout_sec_ = 0.05;
 
     std::vector<std::string> joint_names_ = {
-        "upt_jRightShoulder_rotx",
-        "upt_jRightShoulder_rotz",
-        "upt_jRightShoulder_roty",
+        "upt_jRightShoulder_elv_angle",
+        "upt_jRightShoulder_shoulder_elv",
+        "upt_jRightShoulder_shoulder_rot",
         "upt_jRightElbow_rotz",
         "upt_jRightElbow_roty",
         "upt_jRightWrist_rotx",
@@ -108,6 +115,10 @@ private:
     // math utilities
     pinocchio::Model model_, arm_model_;
     pinocchio::Data data_, arm_data_;
+    std::array<pinocchio::JointIndex, kArmOptDof> arm_opt_joint_ids_;
+    std::array<double, kArmOptDof> arm_opt_joint_multipliers_;
+    pinocchio::JointIndex arm_mimic_joint_id_;
+    double arm_mimic_joint_multiplier_ = -1.0;
     std::string ee_frame_name_, hand_frame_name_, shoulder_frame_name_;
     pinocchio::FrameIndex ee_frame_id_, hand_frame_id_;
     pinocchio::SE3 T_eehand_, T_handee_, T_worldee_,T_worldhand_,T_shoulderhand_,T_worldshoulder_;

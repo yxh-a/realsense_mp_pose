@@ -16,6 +16,7 @@
 
 #include <Eigen/Dense>
 #include <nlopt.h>
+#include <array>
 #include <string>
 #include <vector>
 
@@ -26,14 +27,23 @@ public:
     static double costFunction(unsigned n, const double* x, double* grad, void* data);
 
 private:
+    static constexpr std::size_t kOptDof = 7;
+
     // Callbacks
     void joint_state_callback(const std_msgs::msg::Float32MultiArray::SharedPtr msg);
+    void publishJointState(const Eigen::VectorXd& q_current);
+    Eigen::VectorXd modelConfigurationFromOpt(const double* values) const;
+    Eigen::VectorXd modelConfigurationFromOpt(const std::vector<double>& values) const;
 
     // Pinocchio model and data
     pinocchio::Model model_;
     pinocchio::Data data_;
     std::vector<std::string> joint_names_;
     std::vector<std::string> opt_joint_names_;
+    std::array<pinocchio::JointIndex, kOptDof> opt_joint_ids_;
+    std::array<double, kOptDof> opt_joint_multipliers_;
+    pinocchio::JointIndex mimic_joint_id_;
+    double mimic_joint_multiplier_ = -1.0;
     Eigen::VectorXd q_init_, q, q_prev_, q_prev2_;
     bool have_prev_, have_prev2_;
     double w_vel_, w_acc_;
@@ -60,10 +70,9 @@ private:
     nlopt_opt opt_;
 
     // Operational parameters
-    std::string method_;
+    bool enable_optimization_ = true;
     bool print_error_before_loop = false;
     bool print_error_after_loop = false;
-    bool print_error_in_loop = false;
     bool print_joint_angles = false;
     bool print_critical_transforms = true;
     
