@@ -155,3 +155,88 @@ pos_weight / rot_weight / joint_penalty_weight / velocity_weight / acceleration_
 ```
 
 with covariance terms that have clearer probabilistic meaning.
+
+## As Implemented (read this before tuning the math)
+
+The sections above are the original design scaffold. The actual node
+(`src/arm_pose_ekf_node.cpp`) implements a focused subset, applied as
+**sequential** corrections (not one stacked update, and not iterated). The arm
+kinematics are re-linearized between every step via `updateArmKinematics`.
+
+**Trigger:** `robotJointCallback` is the only thing that advances the filter.
+Keypoint callbacks merely cache the latest shoulder-frame Gaussian.
+
+**Prediction** — pure constant velocity with white-noise acceleration:
+
+```text
+q  <- q + dt * dq
+dq <- dq
+P  <- F P F^T + Q     (Q = white-noise-acceleration covariance)
+```
+
+**Corrections actually run, in order:**
+
+1. Hand position — `r = p_meas - p_model(q)`, `H = [J_v(q), 0]` (3D).
+2. Hand rotation — `r = log3(R_meas * R_model^T)`, `H = [J_w(q), 0]` (3D).
+   Left/world-aligned error to match the LOCAL_WORLD_ALIGNED Jacobian.
+3. Hand twist — `r = v_meas - J_hand(q) * dq`, `H = [0, J_hand(q)]` (6D).
+4. Bone-direction keypoints — on the **unit** bone vector
+   `u = (p_end - p_start)/||p_end - p_start||`:
+
+   ```text
+   r = u_meas - u_model(q)
+   H = [ (I - u u^T)/||s|| * (J_end - J_start) , 0 ]
+   ```
+
+   Two segments, each masked to only the DOFs that place that bone:
+   - upper_arm (shoulder->elbow): DOFs {0,1} = elv_angle, shoulder_elv
+   - forearm (elbow->wrist): DOFs {2,3} = shoulder_rot, elbow_flexion
+
+   Note: shoulder axial rotation (DOF 2) gets keypoint information **only**
+   from the forearm direction, and the wrist DOFs {5,6} and forearm
+   pronation (DOF 4) get **no** keypoint correction at all — they are driven
+   solely by the hand pose/twist. This is the most likely source of the
+   steady-state offsets seen in `shoulder_rot`, `elbow_roty`, and `wrist_rotz`.
+
+The hand rotation correction supports an **anisotropic** measurement covariance
+(`rotation_axis_ratio`, in hand-frame axes) to model grip compliance: rotation
+about a grip-compliant axis can be down-weighted so it barely corrects the
+wrist/forearm. `[1,1,1]` is plain isotropic.
+
+**Occlusion-gated proximal anchor.** When no keypoint update runs for a cycle
+(elbow occluded -> `keypointSegmentsTooClose`, or vision stale/missing), the
+filter would otherwise let the 6-DOF hand pose drift the proximal null space —
+shoulder axial rotation especially, which the hand pose cannot uniquely resolve.
+Instead, `applyProximalAnchor` holds the four vision-observed proximal joints
+`q0-q3` near their last vision-confident value via a soft equality
+pseudo-measurement (`r = q_anchor - q`, `H = [I4, 0]`, `R = sigma^2 I`). The
+anchor value is cached on every cycle where a real keypoint correction ran. This
+is information, not a hand-set covariance: it collapses `P` on `q0-q3` the same
+way vision did, so the hand pose can no longer move them, and it pulls back drift
+that already started.
+
+The anchor target **coasts** rather than freezing: each occluded cycle it is
+advanced by `dt * dq` using the hand-twist-corrected velocity (the twist update
+is not vision-gated, so `dq` stays honest through the gap). This makes it a
+constant-velocity hold consistent with the predict step — it cancels only the
+hand-pose null-space leak while letting twist + dynamics carry the proximal
+joints through a 1-2 s occlusion, instead of pinning them at a stale snapshot.
+Tuned via `proximal_anchor_sigma` (radians; smaller = stiffer hold) and toggled
+by `proximal_anchor_enabled`. This is a pseudo-measurement (cf. the zero-velocity
+update / ZUPT in inertial navigation).
+
+**Not implemented** (mentioned in the scaffold above but absent in code): a
+joint prior residual `r_q`, capsule/sphere link measurements, and the iterated
+EKF loop. The keypoint update uses bone *directions* rather than landmark
+positions, so it constrains arm orientation but not absolute segment length.
+
+**State constraints:** after every predict/correct, `applyStateConstraints`
+enforces the URDF position/velocity box limits via **Gaussian PDF truncation**
+(Simon & Simon 2010). For each box-constrained component it applies the
+closed-form rank-1 update `x += (m/s)·v`, `P += ((w-1)/s²)·v·vᵀ`, where
+`v = P.col(i)`, `s² = P(i,i)`, and `(m, w)` are the mean/variance of a standard
+normal truncated to the standardized bounds. This updates the covariance and
+propagates to correlated states (incl. q↔dq), and is a no-op when the marginal
+already sits several sigma inside the bounds. `dq` is truncated to its velocity
+limits, and the "no outward velocity at an active position bound" rule is
+applied as a one-sided velocity truncation.

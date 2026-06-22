@@ -7,11 +7,15 @@ arm_pose_ekf:
     hand_frame: "upt_RightHandCOM"
     robot_ee_frame: "lbr_link_ee"
     arm_xacro_file: "right_arm_osim_shoulder_mesh.urdf.xacro"
-    upper_arm_length: 0.35
-    forearm_length: 0.26
+    subject_arm_lengths_file: "subject_arm_lengths.yaml"
+    subject_id: 1
+    # Fallback lengths, used only if the subject is missing from the YAML.
+    upper_arm_length: 0.29
+    forearm_length: 0.244
+    hand_length: 0.0918
 
     ee_to_hand:
-      translation: [0.0, -0.03, 0.08]
+      translation: [0.0, -0.03, 0.1]
       # x y z w
       rotation: [0.2988362387, 0.6408563821, -0.2988362387, 0.6408563821]
 
@@ -21,38 +25,29 @@ arm_pose_ekf:
 
     state:
       # x = [q0..q6, dq0..dq6]
-      initial_q: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      initial_q: [0.0, 0.0, 0.0, 1.5708, 0.0, 0.0, 0.0]
       initial_dq: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
       initial_q_variance: 1.0
       initial_dq_variance: 1.0
 
     process_noise:
-      # Larger acceleration variance allows faster motion; lower values smooth more.
+      # Constant-velocity model with white-noise acceleration. Larger variance
+      # allows faster motion; lower values smooth more.
       acceleration_variance: 1.0e-3
-      velocity_decay: 1.0
 
     processing:
-      # Keep this below the robot joint-state rate to avoid accumulating stale EKF callbacks.
-      # Set to 0.0 to process every incoming robot joint state.
+      # Keep this below the robot joint-state rate to avoid accumulating stale
+      # EKF callbacks. Set to 0.0 to process every incoming robot joint state.
       max_update_rate_hz: 100.0
       robot_joint_queue_depth: 1
       keypoint_queue_depth: 1
 
-    debug:
-      keypoint_markers:
-        # Publishes transformed keypoint Gaussian centers in the shoulder frame
-        # so RViz can show exactly what the EKF uses for keypoint residuals.
-        enabled: true
-        topic: "/arm_pose_ekf/keypoint_markers"
-        sigma_scale: 2.0
-        min_radius: 0.01
-        max_radius: 0.30
-
     constraints:
-      # Joint position limits are read from the rendered arm_xacro_file
-      # through Pinocchio and projected after every EKF predict/correction step.
+      # Joint position/velocity limits are read from the rendered arm_xacro_file
+      # through Pinocchio and enforced after every predict/correction step by
+      # Gaussian PDF truncation (updates both the mean and the covariance).
       enforce_joint_limits: true
-      # When q is projected to a limit, remove dq only if it points farther outside.
+      # When q is truncated to a limit, also forbid velocity pointing farther out.
       zero_velocity_at_limits: true
 
     timing:
@@ -63,35 +58,38 @@ arm_pose_ekf:
     measurements:
       hand_pose:
         enabled: true
-        # Keep position and rotation separately tunable. Hand orientation can
-        # over-constrain the wrist and make the hand spin near the robot EE.
+        # Position and rotation separately tunable. Hand orientation can
+        # over-constrain the wrist near the robot EE.
         use_position: true
         use_rotation: true
-        sigma_position: 0.05
-        sigma_rotation: 0.1
+        sigma_position: 0.01
+        sigma_rotation: 0.03
+        # Grip compliance: per-axis multipliers on sigma_rotation, in HAND-frame
+        # axes [x, y, z]. The human re-grips when the EE rotates, so EE rotation
+        # about the grip-compliant axes should barely correct the wrist/forearm.
+        # Larger ratio = trusted less. [1, 1, 1] is isotropic.
+        rotation_axis_ratio: [1.0, 1.0, 1.0]
 
       hand_twist:
         enabled: true
-        # Uses the same robot EE velocity conversion logic as joint_velocity_estimator.
         sigma_linear_velocity: 0.05
         sigma_angular_velocity: 0.1
 
       keypoint_distributions:
         enabled: true
-        # Legacy position-noise setting kept for compatibility. The current
-        # keypoint update uses bone-vector directions instead of direct link
-        # positions; tune direction_sigma for that correction.
-        default_sigma: 0.03
-        # Dimensionless noise floor for normalized upper-arm/forearm vectors.
-        # This behaves roughly like a small angular noise in radians.
-        direction_sigma: 0.05
+        # The keypoint update uses upper-arm and forearm bone-vector DIRECTIONS
+        # (not link positions). direction_sigma is a dimensionless noise floor on
+        # the normalized vectors (~ small angular noise in radians).
+        direction_sigma: 0.01
         max_age_sec: 0.2
-        # Same validity check as arm_solver_forward: when wrist-elbow,
-        # elbow-shoulder, or shoulder-shoulder is shorter than this threshold,
-        # keypoint corrections are skipped for that EKF update.
+        # Skip keypoint corrections when wrist-elbow, elbow-shoulder, or
+        # shoulder-shoulder is shorter than min_segment_length (bad detection).
         reject_when_segments_too_close: true
         min_segment_length: 0.15
-        gating:
-          enabled: false
-          # 3D position NIS gate. 11.34 is the chi-square 99% threshold for 3 DoF.
-          nis_threshold: 11.34
+        # When no keypoint update runs (elbow occluded -> segments too close, or
+        # vision stale/missing), hold the vision-observed proximal joints q0-q3
+        # at their last vision-confident value via a soft pseudo-measurement, so
+        # the 6-DOF hand pose can't drag the proximal null space (esp. shoulder
+        # axial rotation). sigma is in radians; smaller = stiffer hold.
+        proximal_anchor_enabled: true
+        proximal_anchor_sigma: 0.02

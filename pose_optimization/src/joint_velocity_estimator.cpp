@@ -6,6 +6,7 @@
 #include <pinocchio/algorithm/frames.hpp>
 
 #include <ament_index_cpp/get_package_share_directory.hpp>
+#include <yaml-cpp/yaml.h>
 
 #include <Eigen/Geometry>
 
@@ -18,6 +19,50 @@
 using namespace std::chrono_literals;
 
 namespace {
+
+struct ArmLengths
+{
+    double upper_arm_length;
+    double forearm_length;
+};
+
+std::string resolve_subject_arm_lengths_path(const std::string& arm_lengths_file)
+{
+    if (!arm_lengths_file.empty() && arm_lengths_file.front() == '/') {
+        return arm_lengths_file;
+    }
+
+    return ament_index_cpp::get_package_share_directory("image_pose_tracking") +
+        "/config/" + arm_lengths_file;
+}
+
+ArmLengths load_subject_arm_lengths(
+    const std::string& arm_lengths_file,
+    int subject_id,
+    const ArmLengths& fallback)
+{
+    const std::string yaml_path = resolve_subject_arm_lengths_path(arm_lengths_file);
+    const YAML::Node root = YAML::LoadFile(yaml_path);
+    const std::string subject_key = "subject_" + std::to_string(subject_id);
+    const YAML::Node subject = root["subjects"][subject_key];
+    if (!subject) {
+        throw std::runtime_error(
+            "Subject arm lengths not found for " + subject_key + " in " + yaml_path);
+    }
+
+    ArmLengths lengths = fallback;
+    if (subject["upper_arm_length"]) {
+        lengths.upper_arm_length = subject["upper_arm_length"].as<double>();
+    }
+    if (subject["forearm_length"]) {
+        lengths.forearm_length = subject["forearm_length"].as<double>();
+    }
+    if (!(lengths.upper_arm_length > 0.0) || !(lengths.forearm_length > 0.0)) {
+        throw std::runtime_error(
+            "Subject arm lengths must be positive for " + subject_key + " in " + yaml_path);
+    }
+    return lengths;
+}
 
 std::string render_arm_xacro(
     const std::string &robot_prefix,
@@ -194,13 +239,24 @@ VelocityEstimator::VelocityEstimator()
 {
     this->declare_parameter<std::string>("robot_prefix", "upt_");
     this->declare_parameter<std::string>("robot_color", "blue");
+    this->declare_parameter<std::string>("subject_arm_lengths_file", "subject_arm_lengths.yaml");
+    this->declare_parameter<int>("subject_id", 1);
     this->declare_parameter<double>("upper_arm_length", 0.299);
     this->declare_parameter<double>("forearm_length", 0.248);
 
     const auto robot_prefix = this->get_parameter("robot_prefix").as_string();
     const auto robot_color = this->get_parameter("robot_color").as_string();
-    const auto upper_arm_length = this->get_parameter("upper_arm_length").as_double();
-    const auto forearm_length = this->get_parameter("forearm_length").as_double();
+    const auto subject_arm_lengths_file =
+        this->get_parameter("subject_arm_lengths_file").as_string();
+    const int subject_id =
+        std::max<int64_t>(1, this->get_parameter("subject_id").as_int());
+    const ArmLengths arm_lengths = load_subject_arm_lengths(
+        subject_arm_lengths_file,
+        subject_id,
+        {
+            this->get_parameter("upper_arm_length").as_double(),
+            this->get_parameter("forearm_length").as_double(),
+        });
 
     RCLCPP_INFO(this->get_logger(), "Initializing robot model...");
 
@@ -230,7 +286,10 @@ VelocityEstimator::VelocityEstimator()
     RCLCPP_INFO(this->get_logger(), "Initializing human arm model...");
 
     std::string human_arm_urdf_path = render_arm_xacro(
-        robot_prefix, robot_color, upper_arm_length, forearm_length);
+        robot_prefix,
+        robot_color,
+        arm_lengths.upper_arm_length,
+        arm_lengths.forearm_length);
     pinocchio::urdf::buildModel(human_arm_urdf_path, arm_model_);
     arm_data_ = pinocchio::Data(arm_model_);
     std::remove(human_arm_urdf_path.c_str());

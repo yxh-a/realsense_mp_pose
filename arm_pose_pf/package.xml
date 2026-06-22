@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>arm_pose_ekf</name>
+  <name>arm_pose_pf</name>
   <version>0.0.0</version>
-  <description>Design scaffold for estimating human arm joint pose and velocity with an extended Kalman filter.</description>
+  <description>Estimate human arm joint pose and velocity with a particle filter using the same measurements as arm_pose_ekf.</description>
   <maintainer email="alanhyxszic@gmail.com">yuxuan_cor</maintainer>
   <license>TODO: License declaration</license>
 
@@ -16,6 +16,7 @@
   <depend>sensor_msgs</depend>
   <depend>tf2</depend>
   <depend>tf2_ros</depend>
+  <depend>visualization_msgs</depend>
   <depend>yaml-cpp</depend>
 
   <test_depend>ament_lint_auto</test_depend>

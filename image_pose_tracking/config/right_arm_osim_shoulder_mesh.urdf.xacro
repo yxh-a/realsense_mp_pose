@@ -90,7 +90,7 @@
             <geometry>
                 <mesh filename="${mesh_dir}/RightShoulder.stl" scale="0.64444444 0.64444444 1.03030303"/>
             </geometry>
-            <material name="mesh_color"/>
+            <material name="color"/>
         </visual>
         <collision>
             <origin xyz="0 0 -0.05" rpy="0 0 0"/>
@@ -110,7 +110,7 @@
         <parent link="${prefix}RightShoulder"/>
         <child link="${prefix}RightShoulder_elv_angle"/>
         <dynamics damping="0.1" friction="0.0"/>
-        <limit effort="30" velocity="1.0" lower="-1.65806279" upper="2.26892803"/>
+        <limit effort="30" velocity="1.0" lower="-1.04" upper="1.57"/>
         <axis xyz="0.0048 0.99908918 0.04240001"/>
     </joint>
 
@@ -127,7 +127,7 @@
         <parent link="${prefix}RightShoulder_elv_angle"/>
         <child link="${prefix}RightShoulder_shoulder_elv"/>
         <dynamics damping="0.1" friction="0.0"/>
-        <limit effort="30" velocity="1.0" lower="0" upper="3.14159265"/>
+        <limit effort="30" velocity="1.0" lower="0" upper="2.094"/>
         <axis xyz="-0.99826136 0.0023 0.05889802"/>
     </joint>
 
@@ -144,7 +144,7 @@
         <parent link="${prefix}RightShoulder_shoulder_elv"/>
         <child link="${prefix}RightShoulder_shoulder1_r2"/>
         <dynamics damping="0.1" friction="0.0"/>
-        <limit effort="30" velocity="1.0" lower="-2.26892803" upper="1.65806279"/>
+        <limit effort="30" velocity="1.0" lower="-1.04" upper="1.57"/>
         <axis xyz="0.0048 0.99908918 0.04240001"/>
         <mimic joint="${prefix}jRightShoulder_elv_angle" multiplier="-1.0" offset="0.0"/>
     </joint>
@@ -177,7 +177,7 @@
             <geometry>
                 <mesh filename="${mesh_dir}/RightUpperArm.stl" scale="0.64444444 0.64444444 ${upper_arm_mesh_scale_z}"/>
             </geometry>
-            <material name="mesh_color"/>
+            <material name="color"/>
         </visual>
         <collision>
             <origin xyz="0 ${upper_arm_com_y} 0" rpy="1.5708 0 0"/>
@@ -207,7 +207,7 @@
             <geometry>
                 <mesh filename="${mesh_dir}/RightForeArm.stl" scale="0.61111111 0.61111111 ${forearm_mesh_scale_z}"/>
             </geometry>
-            <material name="mesh_color"/>
+            <material name="color"/>
         </visual>
         <collision>
             <origin xyz="0 ${forearm_com_y} 0" rpy="1.5708 0 0"/>
@@ -239,7 +239,7 @@
         <parent link="${prefix}RightForeArm_f1"/>
         <child link="${prefix}RightHand_f1"/>
         <dynamics damping="0.1" friction="0.0"/>
-        <limit effort="30" velocity="1.0" lower="-1.5708" upper="1.5708"/>
+        <limit effort="30" velocity="1.0" lower="-1.047" upper="1.047"/>
         <axis xyz="1 0 0"/>
     </joint>
 
@@ -256,7 +256,7 @@
         <parent link="${prefix}RightHand_f1"/>
         <child link="${prefix}RightHand"/>
         <dynamics damping="0.1" friction="0.0"/>
-        <limit effort="30" velocity="1.0" lower="-0.723599" upper="0.549066"/>
+        <limit effort="30" velocity="1.0" lower="-0.52" upper="0.26"/>
         <axis xyz="0 0 1"/>
     </joint>
 
@@ -271,7 +271,7 @@
             <geometry>
                 <mesh filename="${mesh_dir}/RightHand.stl" scale="0.9 ${hand_mesh_scale_y} 0.55555556"/>
             </geometry>
-            <material name="mesh_color"/>
+            <material name="color"/>
         </visual>
         <collision>
             <origin xyz="0 ${-float(hand_length)} 0" rpy="0 0 0"/>

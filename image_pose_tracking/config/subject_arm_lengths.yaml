@@ -1,0 +1,67 @@
+# Per-subject arm geometry and grip calibration.
+#
+# grip_offset: hand-frame rotation [x, y, z] in DEGREES, applied on top of the
+# nominal ee_to_hand rotation to model grip compliance (the static rotation
+# between the robot tool and where the hand actually seats). Applied as intrinsic
+# X->Y->Z about the hand-frame axes: R_offset = Rx * Ry * Rz, right-multiplied
+# onto the nominal ee_to_hand rotation. [0, 0, 0] is a no-op (use the nominal).
+subjects:
+  subject_1:
+    upper_arm_length: 0.29
+    forearm_length: 0.244
+    hand_length: 0.08
+    grip_offset: [0.0, 0.0, 0.0]
+  subject_2:
+    upper_arm_length: 0.29
+    forearm_length: 0.244
+    hand_length: 0.08
+    grip_offset: [0.0, 0.0, 0.0]
+  subject_3:
+    upper_arm_length: 0.29
+    forearm_length: 0.244
+    hand_length: 0.08
+    grip_offset: [0.0, 0.0, 0.0]
+  subject_4:
+    upper_arm_length: 0.29
+    forearm_length: 0.244
+    hand_length: 0.08
+    grip_offset: [0.0, 0.0, 0.0]
+  subject_5:
+    upper_arm_length: 0.321
+    forearm_length: 0.249
+    hand_length: 0.088
+    grip_offset: [0.0, 15.0, 10.0]
+  subject_6:
+    upper_arm_length: 0.29
+    forearm_length: 0.244
+    grip_offset: [0.0, 0.0, 0.0]
+  subject_7:
+    upper_arm_length: 0.29
+    forearm_length: 0.244
+    hand_length: 0.08
+    grip_offset: [0.0, 0.0, 0.0]
+  subject_8:
+    upper_arm_length: 0.323
+    forearm_length: 0.239
+    hand_length: 0.079
+    grip_offset: [0.0, 0.0, 0.0]
+  subject_9:
+    upper_arm_length: 0.348
+    forearm_length: 0.266
+    hand_length: 0.094
+    grip_offset: [0.0, 0.0, 0.0]
+  subject_10:
+    upper_arm_length: 0.29
+    forearm_length: 0.244
+    hand_length: 0.08
+    grip_offset: [0.0, 0.0, 0.0]
+  subject_11:
+    upper_arm_length: 0.29
+    forearm_length: 0.244
+    hand_length: 0.08
+    grip_offset: [0.0, 0.0, 0.0]
+  subject_12:
+    upper_arm_length: 0.29
+    forearm_length: 0.244
+    hand_length: 0.08
+    grip_offset: [0.0, 0.0, 0.0]

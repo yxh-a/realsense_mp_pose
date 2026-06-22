@@ -4,10 +4,11 @@ ee2hand:
   rotation: [0.2988362387, 0.6408563821, -0.2988362387, 0.6408563821] # -90, 90, 40
 
 arm_geometry:
-
-# subject 0
-  upper_arm_length: 0.35
-  forearm_length: 0.26
+  subject_arm_lengths_file: "subject_arm_lengths.yaml"
+  subject_id: 1
+  # Fallback values used only if direct parameters are needed by older launch files.
+  upper_arm_length: 0.29
+  forearm_length: 0.244
 
 
 

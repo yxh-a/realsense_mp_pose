@@ -29,7 +29,7 @@ class KeypointDistributionExtractionNode(Node):
         self.declare_parameter('joint_center_offset_y', 0.0)
         self.declare_parameter('joint_center_offset_z', 0.05)
         self.declare_parameter('keypoint_offsets.wrist', [0.0, 0.0, 0.05])
-        self.declare_parameter('keypoint_offsets.elbow', [0.0, 0.0, 0.2])
+        self.declare_parameter('keypoint_offsets.elbow', [0.0, 0.0, 0.05])
         self.declare_parameter('keypoint_offsets.shoulder', [0.0, 0.0, 0.05])
         self.declare_parameter('lateral_variance_floor', 1.0e-4)
         self.declare_parameter('depth_variance_floor', 4.0e-4)
@@ -40,10 +40,19 @@ class KeypointDistributionExtractionNode(Node):
         self.declare_parameter('marker_min_radius', 0.01)
         self.declare_parameter('marker_max_radius', 0.30)
         self.declare_parameter('shoulder_transform_buffer_size', 10)
+        self.declare_parameter('shoulder_translation_gate.enabled', True)
+        self.declare_parameter('shoulder_translation_gate.calibration_duration_sec', 3.0)
+        self.declare_parameter('shoulder_translation_gate.reject_distance_m', 0.20)
+        self.declare_parameter('shoulder_translation_gate.max_calibration_std_m', 0.05)
+        self.declare_parameter('shoulder_translation_gate.min_calibration_samples', 10)
         self.declare_parameter('keypoints_queue_depth', 1)
         self.declare_parameter('point_cloud_queue_depth', 1)
         self.declare_parameter('max_processing_rate_hz', 15.0)
+        self.declare_parameter('correct_shoulder_yaw', False)
 
+
+        self.get_logger().info('Waiting for parameters...')
+        self.correct_shoulder_yaw = self.get_parameter('correct_shoulder_yaw').get_parameter_value().bool_value
         self.camera_frame = self.get_parameter('camera_frame').get_parameter_value().string_value
         keypoints_topic = self.get_parameter('keypoints_topic').get_parameter_value().string_value
         point_cloud_topic = self.get_parameter('point_cloud_topic').get_parameter_value().string_value
@@ -80,6 +89,21 @@ class KeypointDistributionExtractionNode(Node):
         self.shoulder_transform_buffer_size = (
             self.get_parameter('shoulder_transform_buffer_size').get_parameter_value().integer_value
         )
+        self.shoulder_translation_gate_enabled = (
+            self.get_parameter('shoulder_translation_gate.enabled').get_parameter_value().bool_value
+        )
+        self.shoulder_gate_calibration_duration_sec = (
+            self.get_parameter('shoulder_translation_gate.calibration_duration_sec').get_parameter_value().double_value
+        )
+        self.shoulder_gate_reject_distance_m = (
+            self.get_parameter('shoulder_translation_gate.reject_distance_m').get_parameter_value().double_value
+        )
+        self.shoulder_gate_max_calibration_std_m = (
+            self.get_parameter('shoulder_translation_gate.max_calibration_std_m').get_parameter_value().double_value
+        )
+        self.shoulder_gate_min_calibration_samples = (
+            self.get_parameter('shoulder_translation_gate.min_calibration_samples').get_parameter_value().integer_value
+        )
         keypoints_queue_depth = self.get_parameter('keypoints_queue_depth').get_parameter_value().integer_value
         point_cloud_queue_depth = self.get_parameter('point_cloud_queue_depth').get_parameter_value().integer_value
         self.max_processing_rate_hz = (
@@ -90,8 +114,15 @@ class KeypointDistributionExtractionNode(Node):
         self.keypoints = [None] * len(self.keypoint_names)
         self.point_cloud = None
         self.shoulder_transform_buffer = []
+        self.shoulder_gate_start_ns = None
+        self.shoulder_gate_samples = []
+        self.shoulder_gate_mean = None
+        self.shoulder_gate_calibrated = False
+        self.shoulder_gate_stable = False
         self.last_short_shoulder_warn_ns = -1
         self.last_missing_keypoints_warn_ns = -1
+        self.last_shoulder_gate_outlier_warn_ns = -1
+        self.last_shoulder_gate_time_reset_warn_ns = -1
         self.last_processed_cloud_stamp_ns = None
 
         self.kp_sub = self.create_subscription(
@@ -309,36 +340,133 @@ class KeypointDistributionExtractionNode(Node):
         return float(np.clip(radius, self.marker_min_radius, self.marker_max_radius))
 
     def publish_shoulder_transform(self, right_shoulder_camera, left_shoulder_camera, stamp):
-        shoulder_line = left_shoulder_camera - right_shoulder_camera
-        shoulder_line_unit = self.safe_normalize(shoulder_line)
-        if shoulder_line_unit is None:
-            self.warn_throttled(
-                'last_short_shoulder_warn_ns',
-                'Shoulder line is too short; not updating shoulder TF.',
-            )
-            return
+        right_shoulder_camera = self.filtered_shoulder_translation(right_shoulder_camera, stamp)
 
-        shoulder_line_xz = self.safe_normalize(np.array([shoulder_line_unit[0], 0.0, shoulder_line_unit[2]]))
-        if shoulder_line_xz is None:
+        if not self.correct_shoulder_yaw:
             yaw_correction = 0.0
-        else:
-            yaw_correction = -np.arctan2(shoulder_line_xz[2], shoulder_line_xz[0])
-            if shoulder_line_unit[2] < 0.0:
-                yaw_correction = -yaw_correction
+            self.shoulder_transform_buffer.append((right_shoulder_camera, yaw_correction))
+            if len(self.shoulder_transform_buffer) > self.shoulder_transform_buffer_size:
+                self.shoulder_transform_buffer.pop(0)
 
-        self.shoulder_transform_buffer.append((right_shoulder_camera, yaw_correction))
-        if len(self.shoulder_transform_buffer) > self.shoulder_transform_buffer_size:
-            self.shoulder_transform_buffer.pop(0)
+            
+        else:
+            shoulder_line = left_shoulder_camera - right_shoulder_camera
+            shoulder_line_unit = self.safe_normalize(shoulder_line)
+            if shoulder_line_unit is None:
+                self.warn_throttled(
+                    'last_short_shoulder_warn_ns',
+                    'Shoulder line is too short; not updating shoulder TF.',
+                )
+                return
+
+            shoulder_line_xz = self.safe_normalize(np.array([shoulder_line_unit[0], 0.0, shoulder_line_unit[2]]))
+            if shoulder_line_xz is None:
+                yaw_correction = 0.0
+            else:
+                yaw_correction = -np.arctan2(shoulder_line_xz[2], shoulder_line_xz[0])
+                if shoulder_line_unit[2] < 0.0:
+                    yaw_correction = -yaw_correction
+
+            self.shoulder_transform_buffer.append((right_shoulder_camera, yaw_correction))
+            if len(self.shoulder_transform_buffer) > self.shoulder_transform_buffer_size:
+                self.shoulder_transform_buffer.pop(0)
 
         avg_translation = np.mean([entry[0] for entry in self.shoulder_transform_buffer], axis=0)
         avg_yaw_correction = np.mean([entry[1] for entry in self.shoulder_transform_buffer])
         avg_quat = R.from_euler('xyz', [3.14, 1.57 + avg_yaw_correction, 0.0]).as_quat()
-
+        
         transforms = [
             self.make_tf(self.camera_frame, child, avg_translation, avg_quat, stamp)
             for child in ('RightShoulder', 'gt_RightShoulder', 'upt_RightShoulder')
         ]
         self.tf_broadcaster.sendTransform(transforms)
+
+    def filtered_shoulder_translation(self, right_shoulder_camera, stamp):
+        if not self.shoulder_translation_gate_enabled:
+            return right_shoulder_camera
+
+        stamp_ns = self.stamp_to_ns(stamp)
+        if stamp_ns <= 0:
+            stamp_ns = self.get_clock().now().nanoseconds
+
+        if self.shoulder_gate_start_ns is None:
+            self.shoulder_gate_start_ns = stamp_ns
+
+        elapsed_sec = (stamp_ns - self.shoulder_gate_start_ns) * 1e-9
+        if elapsed_sec < -0.5:
+            self.warn_throttled(
+                'last_shoulder_gate_time_reset_warn_ns',
+                'Shoulder translation gate saw time move backwards; restarting initial calibration.',
+            )
+            self.reset_shoulder_translation_gate(stamp_ns)
+            elapsed_sec = 0.0
+
+        if not self.shoulder_gate_calibrated:
+            self.shoulder_gate_samples.append(np.array(right_shoulder_camera, dtype=float))
+            if elapsed_sec >= self.shoulder_gate_calibration_duration_sec:
+                self.finish_shoulder_translation_gate_calibration()
+            return right_shoulder_camera
+
+        if not self.shoulder_gate_stable or self.shoulder_gate_mean is None:
+            return right_shoulder_camera
+
+        distance_from_initial_mean = float(np.linalg.norm(right_shoulder_camera - self.shoulder_gate_mean))
+        if distance_from_initial_mean > self.shoulder_gate_reject_distance_m:
+            self.warn_throttled(
+                'last_shoulder_gate_outlier_warn_ns',
+                (
+                    'Rejecting right shoulder translation for TF: '
+                    f'{distance_from_initial_mean:.3f} m from initial mean '
+                    f'(limit {self.shoulder_gate_reject_distance_m:.3f} m).'
+                ),
+            )
+            return self.shoulder_gate_mean.copy()
+
+        return right_shoulder_camera
+
+    def finish_shoulder_translation_gate_calibration(self):
+        sample_count = len(self.shoulder_gate_samples)
+        if sample_count < self.shoulder_gate_min_calibration_samples:
+            self.get_logger().warn(
+                'Shoulder translation gate did not receive enough initial samples '
+                f'({sample_count}/{self.shoulder_gate_min_calibration_samples}); leaving gate disabled.'
+            )
+            self.shoulder_gate_calibrated = True
+            self.shoulder_gate_stable = False
+            return
+
+        samples = np.vstack(self.shoulder_gate_samples)
+        self.shoulder_gate_mean = np.mean(samples, axis=0)
+        axis_std = np.std(samples, axis=0)
+        max_axis_std = float(np.max(axis_std))
+        self.shoulder_gate_stable = max_axis_std <= self.shoulder_gate_max_calibration_std_m
+        self.shoulder_gate_calibrated = True
+
+        if self.shoulder_gate_stable:
+            self.get_logger().info(
+                'Shoulder translation gate calibrated: '
+                f'mean=[{self.shoulder_gate_mean[0]:.3f}, '
+                f'{self.shoulder_gate_mean[1]:.3f}, '
+                f'{self.shoulder_gate_mean[2]:.3f}] m, '
+                f'std=[{axis_std[0]:.3f}, {axis_std[1]:.3f}, {axis_std[2]:.3f}] m.'
+            )
+        else:
+            self.get_logger().warn(
+                'Initial shoulder translation was not stable enough for outlier rejection: '
+                f'max std {max_axis_std:.3f} m exceeds '
+                f'{self.shoulder_gate_max_calibration_std_m:.3f} m. Gate disabled.'
+            )
+
+    def reset_shoulder_translation_gate(self, start_ns):
+        self.shoulder_gate_start_ns = start_ns
+        self.shoulder_gate_samples = []
+        self.shoulder_gate_mean = None
+        self.shoulder_gate_calibrated = False
+        self.shoulder_gate_stable = False
+
+    @staticmethod
+    def stamp_to_ns(stamp):
+        return stamp.sec * 1_000_000_000 + stamp.nanosec
 
     def make_tf(self, parent, child, xyz, quat_xyzw, stamp):
         transform = TransformStamped()

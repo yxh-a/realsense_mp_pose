@@ -4,20 +4,13 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /Global Options1
-        - /Status1
-        - /RobotModel1
         - /RobotModel1/Mass Properties1
         - /RobotModel1/Description Topic1
-        - /TF1
         - /TF1/Frames1
         - /TF1/Tree1
-        - /PointCloud21
-        - /MarkerArray1
-        - /RobotModel3
         - /RobotModel3/Description Topic1
       Splitter Ratio: 0.5220779180526733
-    Tree Height: 449
+    Tree Height: 470
   - Class: rviz_common/Selection
     Name: Selection
   - Class: rviz_common/Tool Properties
@@ -75,6 +68,55 @@ Visualization Manager:
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
+        upt_RightForeArm:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        upt_RightForeArm_f1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        upt_RightHand:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        upt_RightHandCOM:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        upt_RightHand_f1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        upt_RightShoulder:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        upt_RightShoulder_elv_angle:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        upt_RightShoulder_shoulder1_r2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        upt_RightShoulder_shoulder_elv:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        upt_RightUpperArm:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        upt_UpperTorso:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
       Mass Properties:
         Inertia: false
         Mass: false
@@ -90,6 +132,8 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: false
+        RightHand (Ground Truth):
+          Value: true
         RightShoulder:
           Value: false
         camera_depth_optical_frame:
@@ -113,9 +157,29 @@ Visualization Manager:
         lbr_link_7:
           Value: false
         lbr_link_ee:
-          Value: true
+          Value: false
+        upt_RightForeArm:
+          Value: false
+        upt_RightForeArm_f1:
+          Value: false
+        upt_RightHand:
+          Value: false
+        upt_RightHandCOM:
+          Value: false
+        upt_RightHand_f1:
+          Value: false
         upt_RightShoulder:
-          Value: true
+          Value: false
+        upt_RightShoulder_elv_angle:
+          Value: false
+        upt_RightShoulder_shoulder1_r2:
+          Value: false
+        upt_RightShoulder_shoulder_elv:
+          Value: false
+        upt_RightUpperArm:
+          Value: false
+        upt_UpperTorso:
+          Value: false
         world:
           Value: false
       Marker Scale: 1
@@ -132,7 +196,20 @@ Visualization Manager:
               gt_RightShoulder:
                 {}
               upt_RightShoulder:
-                {}
+                RightHand (Ground Truth):
+                  {}
+                upt_RightShoulder_elv_angle:
+                  upt_RightShoulder_shoulder_elv:
+                    upt_RightShoulder_shoulder1_r2:
+                      upt_RightUpperArm:
+                        upt_RightForeArm:
+                          upt_RightForeArm_f1:
+                            upt_RightHand_f1:
+                              upt_RightHand:
+                                upt_RightHandCOM:
+                                  {}
+                upt_UpperTorso:
+                  {}
             lbr_link_1:
               lbr_link_2:
                 lbr_link_3:
@@ -156,7 +233,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: RGB8
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 4096
@@ -176,12 +253,12 @@ Visualization Manager:
         Value: /camera/camera/depth/color/points
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
+      Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
       Name: MarkerArray
       Namespaces:
-        {}
+        keypoint_distribution: true
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -295,6 +372,55 @@ Visualization Manager:
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
+        upt_RightForeArm:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        upt_RightForeArm_f1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        upt_RightHand:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        upt_RightHandCOM:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        upt_RightHand_f1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        upt_RightShoulder:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        upt_RightShoulder_elv_angle:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        upt_RightShoulder_shoulder1_r2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        upt_RightShoulder_shoulder_elv:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        upt_RightUpperArm:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        upt_UpperTorso:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
       Mass Properties:
         Inertia: false
         Mass: false
@@ -303,72 +429,6 @@ Visualization Manager:
       Update Interval: 0
       Value: true
       Visual Enabled: true
-    - Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds:
-        Max Value: 10
-        Min Value: -10
-        Value: true
-      Axis: Z
-      Channel Name: intensity
-      Class: rviz_default_plugins/PointCloud2
-      Color: 255; 255; 255
-      Color Transformer: Intensity
-      Decay Time: 0
-      Enabled: true
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 4096
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: PointCloud2
-      Position Transformer: XYZ
-      Selectable: true
-      Size (Pixels): 3
-      Size (m): 0.009999999776482582
-      Style: Flat Squares
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /arm_segments/forearm
-      Use Fixed Frame: true
-      Use rainbow: true
-      Value: true
-    - Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds:
-        Max Value: 10
-        Min Value: -10
-        Value: true
-      Axis: Z
-      Channel Name: intensity
-      Class: rviz_default_plugins/PointCloud2
-      Color: 255; 255; 255
-      Color Transformer: RGB8
-      Decay Time: 0
-      Enabled: true
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 4096
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: PointCloud2
-      Position Transformer: XYZ
-      Selectable: true
-      Size (Pixels): 3
-      Size (m): 0.009999999776482582
-      Style: Flat Squares
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /arm_segments/upper_arm
-      Use Fixed Frame: true
-      Use rainbow: true
-      Value: true
   Enabled: true
   Global Options:
     Background Color: 255; 255; 255
@@ -430,10 +490,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.32228538393974304
+      Pitch: 0.43728548288345337
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 1.1178860664367676
+      Yaw: 0.8078856468200684
     Saved: ~
 Window Geometry:
   Displays:
@@ -443,7 +503,7 @@ Window Geometry:
   Hide Right Dock: false
   Image:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd00000004000000000000021e000003c9fc020000000bfb0000001200530065006c0065006300740069006f006e000000003f000001960000005d00fffffffb0000001e0054006f006f006c002000500072006f00700065007200740069006500730200000d50000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000003f00000201000000cc00fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb000000280020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000000000000000fb0000003c005400720061006a006500630074006f007200790020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000000000000000fb0000000a0049006d0061006700650100000246000001c20000001700ffffff000000010000015d00000331fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073000000003f00000331000000a900fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000007800000005efc0100000002fb0000000800540069006d00650100000000000007800000026f00fffffffb0000000800540069006d006501000000000000045000000000000000000000055c000003c900000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd00000004000000000000021e000003c9fc020000000bfb0000001200530065006c0065006300740069006f006e000000003f000001960000005d00fffffffb0000001e0054006f006f006c002000500072006f00700065007200740069006500730200000d50000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000003f00000216000000cc00fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb000000280020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000000000000000fb0000003c005400720061006a006500630074006f007200790020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000000000000000fb0000000a0049006d006100670065010000025b000001ad0000001700ffffff000000010000015d00000331fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073000000003f00000331000000a900fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000007800000005efc0100000002fb0000000800540069006d00650100000000000007800000026f00fffffffb0000000800540069006d006501000000000000045000000000000000000000055c000003c900000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Time:

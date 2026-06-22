@@ -1,0 +1,153 @@
+arm_pose_pf:
+  ros__parameters:
+    robot_prefix: "upt_"
+    robot_color: "blue"
+    world_frame: "lbr_link_0"
+    shoulder_frame: "upt_RightShoulder"
+    hand_frame: "upt_RightHandCOM"
+    robot_ee_frame: "lbr_link_ee"
+    # Package and relative path for the robot (manipulator) URDF used for FK/Jacobian.
+    robot_urdf_package: "lbr_description"
+    robot_urdf_path: "urdf/iiwa7/iiwa7.urdf"
+    arm_xacro_file: "right_arm_osim_shoulder_mesh.urdf.xacro"
+    subject_arm_lengths_file: "subject_arm_lengths.yaml"
+    subject_id: 1
+    # Fallback values used only if direct parameters are needed by older launch files.
+    upper_arm_length: 0.29
+    forearm_length: 0.244
+
+    # Name suffixes for the 7 independent arm joints. robot_prefix is prepended at startup.
+    arm_joint_names:
+      - "jRightShoulder_elv_angle"
+      - "jRightShoulder_shoulder_elv"
+      - "jRightShoulder_shoulder_rot"
+      - "jRightElbow_rotz"
+      - "jRightElbow_roty"
+      - "jRightWrist_rotx"
+      - "jRightWrist_rotz"
+    # Mimic joint suffix that couples to q0 (shoulder elevation plane).
+    mimic_joint_name: "jRightShoulder_shoulder1_r2"
+    mimic_joint_multiplier: -1.0
+
+    ee_to_hand:
+      translation: [0.0, -0.03, 0.08]
+      # x y z w
+      rotation: [0.2988362387, 0.6408563821, -0.2988362387, 0.6408563821]
+
+    topics:
+      robot_joint_states: "/lbr/joint_states"
+      forward_solver_joint_states: "/arm/joint_states"
+      output_joint_states: "/arm_pose_pf/joint_states"
+
+    state:
+      # x = [q0..q6, dq0..dq6]
+      initial_q: [0.0, 0.0, 0.0, 1.5708, 0.0, 0.0, 0.0]
+      initial_dq: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      initial_q_variance: 1.0
+      initial_dq_variance: 1.0
+
+    particle_filter:
+      # Number of [q,dq] samples tracked by the bootstrap particle filter.
+      # Higher values tolerate multi-modal ambiguity better at higher CPU cost.
+      particle_count: 500
+      seed: 1
+      # Seed/proposal q sampling uses sigma = fraction * (q_upper - q_lower)
+      # for each finite-limited joint. The q_stddev arrays below are fallbacks.
+      joint_limit_initial_q_stddev_fraction: 0.2
+      joint_limit_proposal_q_stddev_fraction: 0.2
+      # Use arm_solver_forward's visual [q0..q6, ...] array only to create
+      # particle spread/proposals. It is not used as a correction likelihood;
+      # robot end-effector pose/twist is the only correction source.
+      initialize_from_forward_solver: true
+      forward_solver_initial_q_variance: 0.05
+      forward_solver_initial_dq_variance: 0.01
+      forward_solver_proposal:
+        # Camera information enters the PF as a proposal, not as a strong
+        # likelihood. After resampling, this replaces a small fraction of
+        # particles with noisy samples around arm_solver_forward's rough q.
+        # The next robot pose/twist likelihood decides whether they survive.
+        enabled: true
+        resampling_fraction: 0.05
+        q_stddev: [0.10, 0.10, 0.15, 0.12, 0.5, 0.5, 0.5]
+        dq_stddev: [0.20, 0.20, 0.30, 0.30, 0.40, 0.50, 0.50]
+      # Resample when effective particle count falls below this fraction.
+      resample_effective_ratio: 0.35
+      # Small post-resampling jitter to preserve diversity.
+      roughening_stddev: 1.0e-4
+
+    process_noise:
+      # Larger acceleration variance allows faster motion; lower values smooth more.
+      acceleration_variance: 5.0e-4
+      velocity_decay: 1.5
+      # Predict step dt is clamped to [0, max_predict_dt_sec]; out-of-range values
+      # (e.g. at startup or after a gap) use fallback_predict_dt_sec instead.
+      max_predict_dt_sec: 1.0
+      fallback_predict_dt_sec: 0.004
+
+    processing:
+      # Keep this below the robot joint-state rate to avoid accumulating stale PF callbacks.
+      # Set to 0.0 to process every incoming robot joint state.
+      max_update_rate_hz: 30.0
+      robot_joint_queue_depth: 1
+      forward_solver_queue_depth: 1
+      output_queue_depth: 10
+
+    debug:
+      # TF child frame name published for the ground-truth hand position (for RViz).
+      ground_truth_hand_frame: "RightHand (Ground Truth)"
+
+    constraints:
+      # Joint position limits are read from the rendered arm_xacro_file
+      # through Pinocchio and projected after every PF predict/correction step.
+      enforce_joint_limits: true
+      # When q is projected to a limit, remove dq only if it points farther outside.
+      zero_velocity_at_limits: true
+
+    timing:
+      tf_lookup_timeout_sec: 0.05
+      use_latest_shoulder_tf: true
+      fallback_to_latest_tf: true
+
+    measurements:
+      hand_pose:
+        enabled: true
+        # Keep position and rotation separately tunable. Hand orientation can
+        # over-constrain the wrist and make the hand spin near the robot EE.
+        use_position: true
+        use_rotation: true
+        sigma_position: 0.05
+        sigma_rotation: 0.2
+        # FK mode for the per-particle hand correction:
+        #   false -> exact per-particle FK (parallelized over particles, OpenMP).
+        #            Correct for a PF; weights particles by the true nonlinear model.
+        #   true  -> single FK + Jacobian linearized about the weighted mean.
+        #            Cheaper but EKF-like (min-norm bias); for benchmarking only.
+        use_linearized_fk: false
+
+      hand_twist:
+        enabled: true
+        sigma_linear_velocity: 0.05
+        sigma_angular_velocity: 0.1
+
+      vision:
+        # Fuse the forward-solver q (/arm/joint_states) as a robust per-particle
+        # likelihood on joint angles, IN ADDITION to its use as a resampling
+        # proposal (particle_filter.forward_solver_proposal). This is what lets
+        # the redundant/null-space joints actually track and denoise over time.
+        #   enabled: false -> proposal-only (vision never touches the weights).
+        #   enabled: true  -> proposal + robust likelihood.
+        # Disable forward_solver_proposal.enabled to isolate the likelihood.
+        enabled: false
+        # Per-joint Student-t scale (rad). Larger = trust vision less on that joint.
+        q_sigma: [0.15, 0.15, 0.25, 0.20, 0.40, 0.50, 0.50]
+        # Student-t degrees of freedom. Small (3-5) = heavy tails = robust to
+        # MediaPipe/pointcloud outliers; large (>30) approaches a Gaussian.
+        student_t_dof: 3.0
+        # Ignore vision frames older than this (seconds).
+        max_age_sec: 0.3
+        gating:
+          # Reject a whole vision frame if its mean residual exceeds the
+          # Gaussian-equivalent Mahalanobis threshold (chi-square, 7 DoF: 18.48
+          # @99%). Raise to be more permissive given the Student-t heavy tails.
+          enabled: true
+          nis_threshold: 18.48
