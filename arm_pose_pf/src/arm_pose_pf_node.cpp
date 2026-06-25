@@ -32,6 +32,10 @@ struct ArmLengths
     double upper_arm_length;
     double forearm_length;
     double hand_length;
+    // Per-subject grip-compliance rotation [x, y, z] in RADIANS (converted from
+    // the degrees stored in the YAML). Applied to the ee->hand rotation only,
+    // not to the rendered xacro. Defaults to no rotation.
+    Eigen::Vector3d grip_offset_rad = Eigen::Vector3d::Zero();
 };
 
 std::string resolve_arm_xacro_path(const std::string& arm_xacro_file)
@@ -75,6 +79,16 @@ ArmLengths load_subject_arm_lengths(
     }
     if (subject["hand_length"]) {
         lengths.hand_length = subject["hand_length"].as<double>();
+    }
+    if (subject["grip_offset"]) {
+        const auto offset = subject["grip_offset"].as<std::vector<double>>();
+        if (offset.size() != 3) {
+            throw std::runtime_error(
+                "grip_offset must have 3 entries [x, y, z] for " + subject_key + " in " + yaml_path);
+        }
+        constexpr double kDegToRad = M_PI / 180.0;
+        lengths.grip_offset_rad =
+            Eigen::Vector3d(offset[0], offset[1], offset[2]) * kDegToRad;
     }
     if (!(lengths.upper_arm_length > 0.0) || !(lengths.forearm_length > 0.0) ||
         !(lengths.hand_length > 0.0)) {
@@ -611,6 +625,25 @@ ArmPosePfNode::ArmPosePfNode()
         ee_hand_rotation[3], ee_hand_rotation[0], ee_hand_rotation[1], ee_hand_rotation[2]);
     T_ee_hand_.translation() = ee_hand_translation;
     T_ee_hand_.rotation() = q_ee_hand.normalized().toRotationMatrix();
+
+    // Apply the per-subject grip-compliance offset to the nominal ee->hand
+    // rotation. The offset is intrinsic X->Y->Z Euler angles about the HAND-frame
+    // axes, so it right-multiplies the nominal rotation:
+    // R_ee_hand <- R_ee_hand * Rx * Ry * Rz. Translation is unchanged; a
+    // [0, 0, 0] offset is a no-op. (Mirrors arm_pose_ekf.)
+    const Eigen::Vector3d& grip = arm_lengths.grip_offset_rad;
+    const Eigen::Matrix3d R_grip_offset =
+        (Eigen::AngleAxisd(grip.x(), Eigen::Vector3d::UnitX()) *
+         Eigen::AngleAxisd(grip.y(), Eigen::Vector3d::UnitY()) *
+         Eigen::AngleAxisd(grip.z(), Eigen::Vector3d::UnitZ()))
+            .toRotationMatrix();
+    T_ee_hand_.rotation() = T_ee_hand_.rotation() * R_grip_offset;
+    if (!grip.isZero()) {
+        RCLCPP_INFO(
+            this->get_logger(),
+            "Applied grip_offset (deg) [%.3f, %.3f, %.3f] to ee_to_hand rotation.",
+            grip.x() * 180.0 / M_PI, grip.y() * 180.0 / M_PI, grip.z() * 180.0 / M_PI);
+    }
 
     // ── Build robot (manipulator) Pinocchio model ────────────────────────────
 

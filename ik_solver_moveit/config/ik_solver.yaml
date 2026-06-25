@@ -1,0 +1,28 @@
+ik_solver_node:
+  ros__parameters:
+    robot_prefix: "ik_"
+    robot_color: "blue"
+
+    # Human-arm model rendered for MoveIt (shared from image_pose_tracking/config).
+    arm_xacro_file: "right_arm_osim_shoulder_mesh.urdf.xacro"
+
+    # Per-subject geometry. Lengths are looked up by subject_id in this YAML;
+    # the upper_arm_length / forearm_length / hand_length below are only used as
+    # a fallback when the subject (or a field) is missing.
+    subject_arm_lengths_file: "subject_arm_lengths.yaml"
+    subject_id: 1
+    upper_arm_length: 0.299
+    forearm_length: 0.248
+    hand_length: 0.0918
+
+    # Hand-eye transform: translation [x, y, z], rotation quaternion [x, y, z, w].
+    # Keep aligned with arm_pose_ekf / arm_pose_pf.
+    ee_to_hand:
+      translation: [0.0, -0.03, 0.1]
+      rotation: [0.2988362387, 0.6408563821, -0.2988362387, 0.6408563821]
+
+    # IK seed (7 DOF), TF frames for the shoulder->ee lookup, and loop rate.
+    initial_joint_states: [0.0, 0.0, 0.0, 1.5708, 0.0, 0.0, 0.0]
+    shoulder_frame: "RightShoulder"
+    robot_ee_frame: "lbr_link_ee"
+    baseline_hz: 20

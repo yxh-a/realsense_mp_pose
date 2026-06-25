@@ -65,3 +65,7 @@ subjects:
     forearm_length: 0.244
     hand_length: 0.08
     grip_offset: [0.0, 0.0, 0.0]
+
+grip_offset_candidates:
+  - [0.0, 0.0, 0.0]
+  - [0.0, 15.0, 10.0]

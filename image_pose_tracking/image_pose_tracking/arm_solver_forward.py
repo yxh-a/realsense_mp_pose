@@ -766,7 +766,7 @@ class Arm_Solver_Node(Node):
 
         transforms = [
             self.make_tf(self.camera_frame, child, avg_translation, avg_quat, stamp)
-            for child in ("RightShoulder", "gt_RightShoulder", "upt_RightShoulder")
+            for child in ("RightShoulder", "gt_RightShoulder", "upt_RightShoulder", "ik_RightShoulder")
         ]
         self.tf_broadcaster.sendTransform(transforms)
 

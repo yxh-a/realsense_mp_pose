@@ -22,7 +22,11 @@
   <depend>urdf</depend>
   <depend>yaml-cpp</depend>
 
-
+  <!-- Runtime: SRDF + kinematics.yaml are read from arm_osim_moveit_config's
+       share dir, and the arm xacro + subject_arm_lengths.yaml from
+       image_pose_tracking's. -->
+  <exec_depend>arm_osim_moveit_config</exec_depend>
+  <exec_depend>image_pose_tracking</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

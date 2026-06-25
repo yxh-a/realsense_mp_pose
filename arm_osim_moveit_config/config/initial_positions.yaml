@@ -1,0 +1,10 @@
+# Default initial positions for upper_arm_osim_shoulder_mesh's ros2_control fake system
+
+initial_positions:
+  jRightElbow_roty: 0
+  jRightElbow_rotz: 0
+  jRightShoulder_elv_angle: 0
+  jRightShoulder_shoulder_elv: 0
+  jRightShoulder_shoulder_rot: 0
+  jRightWrist_rotx: 0
+  jRightWrist_rotz: 0

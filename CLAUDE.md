@@ -14,11 +14,21 @@ The 7 DOF (an OpenSim shoulder model, rendered to URDF and loaded via **Pinocchi
 q = [elv_angle, shoulder_elv, shoulder_rot, elbow_flexion, forearm_prosup, wrist_x, wrist_z]
 ```
 
-There are **three interchangeable estimation backends** over the same state and the same
+There are **two interchangeable estimation backends** over the same state and the same
 measurement/frame math, kept deliberately aligned so they can be swapped in experiments:
-- `pose_optimization` — per-frame NLopt optimizer (+ a separate finite-difference velocity estimator)
-- `arm_pose_ekf` — sequential extended Kalman filter (the maintained successor; see its README)
+- `arm_pose_ekf` — sequential extended Kalman filter (the maintained primary backend; see its README)
 - `arm_pose_pf` — bootstrap particle filter
+
+## Do not touch (imported / vendored)
+
+These are imported third-party packages — **do not modify them**:
+- `apriltag_ros`, `apriltag_msgs` — AprilTag detection
+- `easy_handeye2` — hand-eye calibration
+- `arm_moveit_config` — generated MoveIt config
+- `realsense-ros` — a git submodule (see `.gitmodules`)
+
+Edit only the custom packages: `image_pose_tracking`, `arm_pose_ekf`, `arm_pose_pf`,
+`ik_solver_moveit`.
 
 ## Build, run, test
 
@@ -62,7 +72,6 @@ depth pointcloud ───────────────────┤
    robot /lbr/joint_states + TF + ee_to_hand calibration
                                     ▼
         estimator backend ─► <backend>/joint_states (sensor_msgs/JointState, 7 DOF)
-            optimizer    ─► /optimized_arm/joint_states  (consumes /arm/joint_states)
             arm_pose_ekf ─► /arm_pose_ekf/joint_states
             arm_pose_pf  ─► /arm_pose_pf/joint_states
 ```
@@ -78,7 +87,7 @@ pose/twist via the `ee_to_hand` hand-eye transform, and corrects the modeled arm
   orientation but not absolute segment length. Segment lengths come from
   `subject_arm_lengths.yaml` keyed by `subject_id` (with fallback lengths in the YAML).
 - **Frames are configured, not hard-coded.** `world_frame`, `shoulder_frame`, `hand_frame`,
-  `robot_ee_frame`, and the `robot_prefix` live in the params YAML; keep EKF/PF/optimizer
+  `robot_ee_frame`, and the `robot_prefix` live in the params YAML; keep the EKF and PF
   configs aligned when changing them.
 - **The arm model is a rendered xacro.** `arm_xacro_file` (e.g.
   `right_arm_osim_shoulder_mesh.urdf.xacro`, shared from `image_pose_tracking/config`) is
@@ -87,13 +96,3 @@ pose/twist via the `ee_to_hand` hand-eye transform, and corrects the modeled arm
   "As Implemented" section of `arm_pose_ekf/README.md` before touching the filter math
   (sequential not stacked corrections, occlusion-gated proximal anchor, Gaussian-truncation
   state constraints, which DOFs each measurement actually moves).
-
-## Package map
-
-Custom (edit these): `image_pose_tracking` (Python: MediaPipe keypoints, depth→3D Gaussian
-extraction, forward arm solver, viewers), `pose_optimization`, `arm_pose_ekf`, `arm_pose_pf`,
-`ik_solver_moveit`.
-
-Third-party / vendored (usually leave alone): `apriltag_ros`, `apriltag_msgs`,
-`easy_handeye2` (hand-eye calibration), `arm_moveit_config`, and `realsense-ros`
-(a git submodule, see `.gitmodules`).

@@ -1,0 +1,25 @@
+moveit_setup_assistant_config:
+  urdf:
+    package: image_pose_tracking
+    relative_path: config/right_arm_osim_shoulder_mesh.urdf.xacro
+  srdf:
+    relative_path: config/upper_arm_osim_shoulder_mesh.srdf
+  package_settings:
+    author_name: Yuxuan Hu
+    author_email: yuxuanhu@tudelft.nl
+    generated_timestamp: 1782137201
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity
+  modified_urdf:
+    xacros:
+      - control_xacro
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity
